@@ -1,6 +1,6 @@
 # Umbral Vision
 
-[![npm version](https://badge.fury.io/js/%40hugomoraga%2Fumbral-vision.svg)](https://www.npmjs.com/package/@hugomoraga/umbral-vision)
+[![npm version](https://badge.fury.io/js/%40hugomoraga%2Fumbral-vision.svg)](https://www.npmjs.com/package/@kndl/umbral-vision)
 [![CI](https://github.com/hugomoraga/umbral-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/hugomoraga/umbral-vision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -9,7 +9,7 @@ Framework modular para generación de visuales psicodélicos en tiempo real con 
 ## Install
 
 ```bash
-npm install @hugomoraga/umbral-vision
+npm install @kndl/umbral-vision
 ```
 
 > **Peer dependency**: este paquete requiere [`p5`](https://www.npmjs.com/package/p5) v1.x o v2.x. El consumidor debe proveerlo (típicamente vía CDN).
@@ -19,13 +19,13 @@ npm install @hugomoraga/umbral-vision
 ### Browser (con bundler)
 
 ```javascript
-import { startVisualizer, Effects } from '@hugomoraga/umbral-vision';
+import { startVisualizer, Effects } from '@kndl/umbral-vision';
 
 // Iniciar visualizador con un efecto
 startVisualizer('tunnel');
 
 // Cambiar efecto
-import { changeEffect } from '@hugomoraga/umbral-vision';
+import { changeEffect } from '@kndl/umbral-vision';
 changeEffect('spiral');
 ```
 
@@ -34,7 +34,7 @@ changeEffect('spiral');
 ```html
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.2/p5.min.js"></script>
 <script type="module">
-  import { startVisualizer } from 'https://cdn.jsdelivr.net/npm/@hugomoraga/umbral-vision/dist/index.mjs';
+  import { startVisualizer } from 'https://cdn.jsdelivr.net/npm/@kndl/umbral-vision/dist/index.mjs';
   startVisualizer('tunnel');
 </script>
 ```
@@ -42,7 +42,7 @@ changeEffect('spiral');
 ### Activar reactividad al audio
 
 ```javascript
-import { initAudio, getAudioState, stopAudio } from '@hugomoraga/umbral-vision';
+import { initAudio, getAudioState, stopAudio } from '@kndl/umbral-vision';
 
 await initAudio();
 const { enabled, level } = getAudioState();
@@ -52,7 +52,7 @@ stopAudio();
 ### Auto-transición
 
 ```javascript
-import { startAutoTransition, stopAutoTransition, changeEffect } from '@hugomoraga/umbral-vision';
+import { startAutoTransition, stopAutoTransition, changeEffect } from '@kndl/umbral-vision';
 
 startAutoTransition(10000, ['tunnel', 'spiral', 'mandala'], (effectName) => {
   changeEffect(effectName);

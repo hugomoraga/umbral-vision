@@ -1,5 +1,5 @@
 {
-  "name": "@hugomoraga/umbral-vision",
+  "name": "@kndl/umbral-vision",
   "version": "0.1.0",
   "description": "Framework modular para generación de visuales psicodélicos con p5.js",
   "type": "module",
