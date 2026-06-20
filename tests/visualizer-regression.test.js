@@ -38,13 +38,12 @@ function setupDom() {
 }
 
 describe('Visualizer — regression tests', () => {
-  let dom;
   let p5Mock;
   let originalP5;
   let consoleErrorSpy;
 
   beforeEach(async () => {
-    dom = setupDom();
+    setupDom();
 
     // Mock mínimo de p5 que captura el sketch pasado a new p5()
     p5Mock = function (factory) {
@@ -79,7 +78,7 @@ describe('Visualizer — regression tests', () => {
   });
 
   it('changeEffect pasa el sketch (con strokeWeight) a la factory, no la instancia', async () => {
-    const { startVisualizer, changeEffect, getCurrentEffect } = await import('../src/Visualizer.js');
+    const { startVisualizer, changeEffect } = await import('../src/Visualizer.js');
     const { Effects } = await import('../src/Effects.js');
 
     // Capturar argumentos de TODAS las factories para detectar el bug
