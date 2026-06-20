@@ -102,6 +102,7 @@ export function createThumbnails(container, effects, onSelect) {
   };
 
   const highlight = (name) => {
+    if (!buttons.has(name)) return;
     for (const [n, { btn }] of buttons) {
       btn.setAttribute('aria-pressed', n === name ? 'true' : 'false');
     }

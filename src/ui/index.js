@@ -28,7 +28,7 @@ import {
   loadPreset
 } from './presets.js';
 import { initOnboarding } from './onboarding.js';
-import { downloadFrame, copyShareURL, parseShareURL, buildShareURL } from './share.js';
+import { downloadFrame, copyShareURL, parseShareURL } from './share.js';
 import { showToast, initToastListener } from './toast.js';
 
 const DEFAULT_EFFECT = 'tunnel';
@@ -297,4 +297,28 @@ function wireAudioIndicator(indicator) {
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+}
+
+// Auto-init cuando se carga como módulo principal en la página del generador.
+// ponytail: si el módulo se importa como librería (sin #panel en DOM),
+// este bloque no hace nada gracias al guard.
+// Si el host quiere tomar control manual, setea window.__UV_NO_AUTO_INIT__ = true
+// antes de importar el módulo.
+if (typeof window !== 'undefined'
+    && !window.__UV_NO_AUTO_INIT__
+    && document.getElementById('panel')) {
+  const start = () => {
+    if (window.__UV_MOUNTED__) return;
+    window.__UV_MOUNTED__ = true;
+    mountUI({
+      onFirstFrame: (cb) => {
+        requestAnimationFrame(() => requestAnimationFrame(cb));
+      }
+    });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
 }
