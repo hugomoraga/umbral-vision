@@ -1,6 +1,10 @@
 /**
- * AudioReactive - Manejo de reactividad al audio para efectos visuales
- * KISS: Gestión centralizada del análisis de audio
+ * AudioReactive — análisis de audio reactivo con cleanup completo.
+ *
+ * - US4 FR-004: stopAudio cierra AudioContext completamente (no suspended reteniendo memoria).
+ * - US4 FR-005: lectura de level/FFT ocurre en el renderLoop unificado, no en rAF separado.
+ * - ponytail: getFrequencyData() retorna el mismo Uint8Array (no copia) — el consumidor debe
+ *   leerlo antes del próximo frame. Documentado en JSDoc.
  */
 
 let audioContext = null;
@@ -10,143 +14,114 @@ let audioStream = null;
 let dataArray = null;
 let audioLevel = 0;
 let audioEnabled = false;
-let audioUpdateActive = false;
+const smoothing = 0.8;
 
 /**
- * Inicializar análisis de audio del micrófono
+ * Inicializar análisis de audio del micrófono.
+ * Lanza si getUserMedia no está disponible o si el permiso es denegado.
  */
 export async function initAudio() {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('getUserMedia no está disponible en este navegador');
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      } 
-    });
-    
-    audioStream = stream;
-    
-    if (!audioContext || audioContext.state === 'closed') {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume();
-    }
-    
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    const bufferLength = analyser.frequencyBinCount;
-    dataArray = new Uint8Array(bufferLength);
-    
-    microphone = audioContext.createMediaStreamSource(stream);
-    microphone.connect(analyser);
-    
-    audioEnabled = true;
-    audioUpdateActive = true;
-    
-    updateAudioLevel();
-    
-    return true;
-  } catch (err) {
-    console.error('Error al acceder al micrófono:', err);
-    audioEnabled = false;
-    audioUpdateActive = false;
-    throw err;
+  if (audioEnabled) return true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('getUserMedia no está disponible en este navegador');
   }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    }
+  });
+
+  audioStream = stream;
+
+  if (!audioContext || audioContext.state === 'closed') {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    audioContext = new Ctor();
+  }
+
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = smoothing;
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  microphone = audioContext.createMediaStreamSource(stream);
+  microphone.connect(analyser);
+
+  audioEnabled = true;
+  audioLevel = 0;
+  return true;
 }
 
 /**
- * Actualizar nivel de audio
+ * Tick de audio — debe llamarse desde el renderLoop unificado (no en rAF separado).
+ * Actualiza `audioLevel` y el buffer `dataArray` para `getFrequencyData`.
  */
-function updateAudioLevel() {
-  if (!audioUpdateActive) return;
-  
-  if (audioEnabled && analyser && dataArray) {
-    try {
-      analyser.getByteFrequencyData(dataArray);
-      
-      let sum = 0;
-      let count = 0;
-      const focusRange = Math.min(64, dataArray.length);
-      for (let i = 0; i < focusRange; i++) {
-        sum += dataArray[i];
-        count++;
-      }
-      audioLevel = (sum / count / 255) * 2;
-      audioLevel = Math.min(1, audioLevel);
-      
-      if (audioLevel < 0.05) {
-        audioLevel = 0;
-      }
-    } catch (err) {
-      console.error('Error al leer datos de audio:', err);
-      audioLevel = 0;
-    }
-  } else {
+export function tickAudio() {
+  if (!audioEnabled || !analyser || !dataArray) {
+    audioLevel = 0;
+    return;
+  }
+  try {
+    analyser.getByteFrequencyData(dataArray);
+    const focusRange = Math.min(64, dataArray.length);
+    let sum = 0;
+    for (let i = 0; i < focusRange; i++) sum += dataArray[i];
+    const raw = (sum / focusRange / 255) * 2;
+    audioLevel = raw < 0.05 ? 0 : Math.min(1, raw);
+  } catch {
     audioLevel = 0;
   }
-  
-  if (audioUpdateActive) {
-    requestAnimationFrame(updateAudioLevel);
-  }
 }
 
 /**
- * Detener análisis de audio
+ * Detener análisis y liberar TODOS los recursos.
+ * US4 FR-004: AudioContext.close() evita leak (no queda suspended).
  */
-export function stopAudio() {
-  audioUpdateActive = false;
+export async function stopAudio() {
   audioEnabled = false;
   audioLevel = 0;
-  
+
   if (microphone) {
-    try {
-      microphone.disconnect();
-    } catch (e) {
-      console.warn('Error al desconectar micrófono:', e);
-    }
+    try { microphone.disconnect(); } catch { /* noop */ }
     microphone = null;
   }
-  
+
+  if (analyser) {
+    try { analyser.disconnect(); } catch { /* noop */ }
+    analyser = null;
+  }
+
   if (audioStream) {
-    try {
-      audioStream.getTracks().forEach(track => track.stop());
-    } catch (e) {
-      console.warn('Error al detener stream:', e);
-    }
+    try { audioStream.getTracks().forEach(track => track.stop()); } catch { /* noop */ }
     audioStream = null;
   }
-  
-  analyser = null;
+
+  if (audioContext && audioContext.state !== 'closed') {
+    try { await audioContext.close(); } catch { /* noop */ }
+  }
+  audioContext = null;
   dataArray = null;
 }
 
 /**
- * Obtener estado del audio
+ * Snapshot del estado del audio para los efectos.
  */
 export function getAudioState() {
-  return {
-    enabled: audioEnabled,
-    level: audioLevel
-  };
+  return { enabled: audioEnabled, level: audioLevel };
 }
 
 /**
- * Obtener datos de frecuencia (para análisis avanzado)
+ * Buffer de frecuencias FFT (Uint8Array, length 128).
+ * US4: retorna el MISMO buffer cada frame — no copia — para evitar GC pressure.
+ * El consumidor debe consumir los datos dentro del mismo frame, antes del próximo tickAudio().
+ * Retorna null si el audio no está activo.
  */
 export function getFrequencyData() {
-  if (!audioEnabled || !analyser || !dataArray) {
-    return null;
-  }
-  
-  analyser.getByteFrequencyData(dataArray);
-  return Array.from(dataArray);
+  return dataArray;
 }
-

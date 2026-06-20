@@ -11,13 +11,18 @@ import {
   changeEffect,
   getCurrentEffect,
   getAvailableEffects,
-  stopVisualizer
+  stopVisualizer,
+  setVisualizerConfig,
+  getVisualizerConfig,
+  getFpsCounter,
+  getDeviceProfile
 } from './Visualizer.js';
 import {
   initAudio,
   stopAudio,
   getAudioState,
-  getFrequencyData
+  getFrequencyData,
+  tickAudio
 } from './AudioReactive.js';
 import {
   startAutoTransition,
@@ -35,6 +40,11 @@ import {
   meltEffect,
   fractalNoise
 } from './Utils.js';
+import { getLiteMode, setLiteMode } from './perf/deviceProfile.js';
+import { createFpsCounter } from './perf/fpsCounter.js';
+import { createRenderLoop } from './perf/renderLoop.js';
+import { createFpsWidget } from './perf/fpsCounterUI.js';
+import { ObjectPool } from './perf/objectPool.js';
 import { mountUI } from './ui/index.js';
 
 // Re-exportar todo
@@ -44,13 +54,18 @@ export {
   changeEffect,
   getCurrentEffect,
   getAvailableEffects,
-  stopVisualizer
+  stopVisualizer,
+  setVisualizerConfig,
+  getVisualizerConfig,
+  getFpsCounter,
+  getDeviceProfile
 };
 export {
   initAudio,
   stopAudio,
   getAudioState,
-  getFrequencyData
+  getFrequencyData,
+  tickAudio
 };
 export {
   startAutoTransition,
@@ -68,6 +83,14 @@ export {
   meltEffect,
   fractalNoise
 };
+export {
+  getLiteMode,
+  setLiteMode,
+  createFpsCounter,
+  createRenderLoop,
+  createFpsWidget,
+  ObjectPool
+};
 export { mountUI };
 
 // Exportar como objeto namespace para compatibilidad
@@ -78,13 +101,18 @@ export default {
     change: changeEffect,
     getCurrent: getCurrentEffect,
     getAvailable: getAvailableEffects,
-    stop: stopVisualizer
+    stop: stopVisualizer,
+    setConfig: setVisualizerConfig,
+    getConfig: getVisualizerConfig,
+    getFpsCounter,
+    getDeviceProfile
   },
   Audio: {
     init: initAudio,
     stop: stopAudio,
     getState: getAudioState,
-    getFrequencyData: getFrequencyData
+    getFrequencyData: getFrequencyData,
+    tick: tickAudio
   },
   Transition: {
     start: startAutoTransition,
@@ -101,6 +129,14 @@ export default {
     distortionWave,
     meltEffect,
     fractalNoise
+  },
+  Perf: {
+    getLiteMode,
+    setLiteMode,
+    createFpsCounter,
+    createRenderLoop,
+    createFpsWidget,
+    ObjectPool
   },
   mountUI
 };

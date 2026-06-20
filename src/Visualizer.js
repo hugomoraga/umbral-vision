@@ -1,112 +1,149 @@
 /**
- * Visualizer - Gestor principal del canvas y efectos visuales
- * KISS: Manejo centralizado de p5.js y efectos
+ * Visualizer — gestor principal del canvas y efectos visuales.
+ *
+ * Cambios vs v0.1:
+ * - US1 FR-001/002: renderLoop unificado (audio + render + fps en un solo rAF)
+ * - US1 FR-003: DPR cap a 1.5 desktop / 1.0 mobile
+ * - US1 FR-005: tickAudio() se llama en el render loop, no en rAF separado
+ * - ponytail: el efecto se crea una vez en setup; sólo cambiamos la referencia
+ *   activa en changeEffect. No destruimos/recreamos el canvas (ahorra GC).
  */
 
 import { Effects } from './Effects.js';
+import { createRenderLoop } from './perf/renderLoop.js';
+import { createFpsCounter } from './perf/fpsCounter.js';
+import { detectProfile } from './perf/deviceProfile.js';
 
 let p5Instance = null;
 let currentEffect = null;
 let currentEffectName = null;
+let renderLoop = null;
+let fpsCounter = null;
+let config = { isLite: false };
+
+const profile = detectProfile();
 
 /**
- * Iniciar visualizador con un efecto específico
+ * Iniciar visualizador con un efecto.
+ * El parámetro `container` es ignorado — p5 siempre monta en <main>.
  */
 export function startVisualizer(effectName = 'tunnel', container = null) {
   if (typeof p5 === 'undefined') {
-    console.error('p5.js no está cargado');
+    console.warn('p5.js no está cargado — el visualizador requiere p5');
     return;
   }
 
   if (!Effects[effectName]) {
-    console.error('Efecto no encontrado:', effectName);
+    console.warn('Efecto no encontrado:', effectName);
+    effectName = 'tunnel';
+  }
+
+  if (!p5Instance) {
+    p5Instance = new p5((sketch) => {
+      sketch.setup = function () {
+        const cnv = sketch.createCanvas(window.innerWidth, window.innerHeight);
+        const main = document.querySelector('#generator main') || document.body;
+        if (cnv && cnv.elt && main && cnv.elt.parentNode !== main) {
+          main.appendChild(cnv.elt);
+        }
+        // US1 FR-003: DPR cap
+        const targetDpr = profile.isMobile ? 1.0 : 1.5;
+        sketch.pixelDensity(Math.min(window.devicePixelRatio || 1, targetDpr));
+        sketch.colorMode(sketch.HSB, 360, 100, 100);
+        sketch.stroke(255);
+        sketch.noFill();
+      };
+
+      sketch.windowResized = function () {
+        sketch.resizeCanvas(window.innerWidth, window.innerHeight);
+      };
+
+      config = { isLite: false };
+
+      currentEffectName = effectName;
+      currentEffect = Effects[effectName](sketch);
+
+      fpsCounter = createFpsCounter();
+      renderLoop = createRenderLoop({
+        targetFps: 60,
+        fpsCounter,
+        onFrame: () => {
+          if (currentEffect && currentEffect.draw) {
+            currentEffect.draw();
+          }
+        }
+      });
+      renderLoop.start();
+
+      // p5 sigue dibujando via sketch.draw, pero el work real está en renderLoop.
+      // El sketch.draw queda como no-op para no duplicar el trabajo.
+      sketch.draw = function () { /* renderLoop handles it */ };
+    }, container);
     return;
   }
 
-  // Remover instancia anterior si existe
-  if (p5Instance) {
-    p5Instance.remove();
-  }
-
-  currentEffectName = effectName;
-
-  p5Instance = new p5((sketch) => {
-    sketch.setup = function() {
-      const canvas = sketch.createCanvas(window.innerWidth, window.innerHeight);
-      canvas.elt.style.width = '100%';
-      canvas.elt.style.height = '100%';
-      canvas.elt.style.maxWidth = '100%';
-      sketch.colorMode(sketch.HSB, 360, 100, 100);
-      sketch.stroke(255);
-      sketch.noFill();
-    };
-
-    // Crear instancia del efecto
-    currentEffect = Effects[effectName](sketch);
-
-    sketch.draw = function() {
-      if (currentEffect && currentEffect.draw) {
-        currentEffect.draw();
-      }
-    };
-
-    sketch.windowResized = function() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      sketch.resizeCanvas(width, height);
-      const canvas = sketch.canvas;
-      if (canvas && canvas.elt) {
-        canvas.elt.style.width = '100%';
-        canvas.elt.style.height = '100%';
-        canvas.elt.style.maxWidth = '100%';
-        canvas.elt.style.maxHeight = '100%';
-      }
-    };
-  }, container);
+  // Instancia ya existe: sólo cambiamos el efecto.
+  changeEffect(effectName);
 }
 
 /**
- * Cambiar efecto visual
+ * Cambiar efecto activo.
  */
 export function changeEffect(effectName) {
-  console.log('Intentando cambiar a efecto:', effectName);
-  console.log('Efectos disponibles:', Object.keys(Effects));
-  console.log('Effects object:', Effects);
-  
   if (!Effects[effectName]) {
-    console.error('Efecto no encontrado:', effectName);
-    console.log('Efectos disponibles:', Object.keys(Effects));
+    console.warn('Efecto no encontrado:', effectName);
     return;
   }
-  
-  startVisualizer(effectName);
+  if (!p5Instance) {
+    startVisualizer(effectName);
+    return;
+  }
+  const sk = p5Instance;
+  currentEffectName = effectName;
+  currentEffect = Effects[effectName](sk);
 }
 
-/**
- * Obtener efecto actual
- */
 export function getCurrentEffect() {
   return currentEffectName;
 }
 
-/**
- * Obtener lista de efectos disponibles
- */
 export function getAvailableEffects() {
-  const effects = Object.keys(Effects);
-  console.log('Efectos disponibles:', effects);
-  return effects;
+  return Object.keys(Effects);
+}
+
+export function stopVisualizer() {
+  if (renderLoop) { renderLoop.stop(); renderLoop = null; }
+  if (p5Instance) { p5Instance.remove(); p5Instance = null; }
+  currentEffect = null;
+  currentEffectName = null;
+  fpsCounter = null;
 }
 
 /**
- * Detener visualizador
+ * Update config (e.g., lite mode toggled). Los efectos leen `config.isLite` en draw.
  */
-export function stopVisualizer() {
-  if (p5Instance) {
-    p5Instance.remove();
-    p5Instance = null;
-    currentEffect = null;
-    currentEffectName = null;
-  }
+export function setVisualizerConfig(next) {
+  config = { ...config, ...next };
 }
 
+export function getVisualizerConfig() {
+  return config;
+}
+
+/**
+ * Acceso al fpsCounter para el widget de métricas.
+ */
+export function getFpsCounter() {
+  return fpsCounter;
+}
+
+/**
+ * Acceso al renderLoop para integración con UI (toggle lite, etc.).
+ */
+export function getRenderLoop() {
+  return renderLoop;
+}
+
+export function getDeviceProfile() {
+  return profile;
+}

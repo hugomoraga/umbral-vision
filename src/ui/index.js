@@ -30,6 +30,8 @@ import {
 import { initOnboarding } from './onboarding.js';
 import { downloadFrame, copyShareURL, parseShareURL } from './share.js';
 import { showToast, initToastListener } from './toast.js';
+import { createFpsWidget } from '../perf/fpsCounterUI.js';
+import { getFpsCounter, getLiteMode, setLiteMode } from '../index.js';
 
 const DEFAULT_EFFECT = 'tunnel';
 
@@ -184,6 +186,23 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
   // Wire audio indicator into render loop (ponytail: shared rAF, no separate timer)
   wireAudioIndicator(indicator);
 
+  // FPS widget (opt-in via Shift+F)
+  const fpsCounter = getFpsCounter();
+  const fpsWidget = createFpsWidget(fpsCounter, document.body);
+  wireFpsToggle(fpsWidget);
+
+  // Lite mode toggle (FR-009: opt-out/in para el usuario)
+  const liteBtn = document.getElementById('lite-mode-btn');
+  if (liteBtn) {
+    const syncLite = () => { liteBtn.textContent = getLiteMode() ? '🌙 Lite: ON' : '🌙 Lite: OFF'; };
+    syncLite();
+    liteBtn.addEventListener('click', () => {
+      setLiteMode(!getLiteMode());
+      syncLite();
+      showToast(`Modo lite: ${getLiteMode() ? 'activado' : 'desactivado'}`);
+    });
+  }
+
   // Fullscreen
   if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreen);
 
@@ -297,6 +316,17 @@ function wireAudioIndicator(indicator) {
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+}
+
+function wireFpsToggle(fpsWidget) {
+  if (!fpsWidget) return;
+  window.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+      e.preventDefault();
+      fpsWidget.toggle();
+    }
+  });
 }
 
 // Auto-init cuando se carga como módulo principal en la página del generador.
