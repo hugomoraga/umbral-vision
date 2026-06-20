@@ -1,6 +1,7 @@
 # Umbral Vision
 
 [![npm version](https://badge.fury.io/js/%40hugomoraga%2Fumbral-vision.svg)](https://www.npmjs.com/package/@hugomoraga/umbral-vision)
+[![CI](https://github.com/hugomoraga/umbral-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/hugomoraga/umbral-vision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Framework modular para generación de visuales psicodélicos en tiempo real con [p5.js](https://p5js.org/).

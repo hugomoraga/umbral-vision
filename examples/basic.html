@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Umbral Vision — Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: system-ui, sans-serif;
+      color: #fff;
+    }
+    main { width: 100vw; height: 100vh; }
+    .hint {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      font-size: 0.85rem;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.2/p5.min.js"></script>
+</head>
+<body>
+  <main></main>
+  <p class="hint">Umbral Vision demo · efecto por defecto: tunnel</p>
+  <script type="module">
+    import { startVisualizer, changeEffect, getAvailableEffects, Effects } from '../src/index.js';
+
+    startVisualizer('tunnel');
+
+    window.UV = { startVisualizer, changeEffect, getAvailableEffects, Effects };
+    console.log('Umbral Vision cargado. Efectos:', getAvailableEffects());
+  </script>
+</body>
+</html>
