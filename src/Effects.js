@@ -112,58 +112,85 @@ export const Effects = {
    */
   mandala: (sketch) => {
     let rotation = 0;
-    
+
+    // ponytail: constantes pre-computadas que no dependen del frame
+    const LAYERS = 12;
+    const SIDES = 6;
+    const TWO_PI = Math.PI * 2;
+    const TWO_PI_OVER_SIX = TWO_PI / SIDES;
+    const hexCos = new Float32Array(SIDES);
+    const hexSin = new Float32Array(SIDES);
+    for (let j = 0; j < SIDES; j++) {
+      hexCos[j] = Math.cos(TWO_PI_OVER_SIX * j);
+      hexSin[j] = Math.sin(TWO_PI_OVER_SIX * j);
+    }
+
     return {
       draw: () => {
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 8);
+
+        // Wrap el translate al centro en push/pop para que no acumule entre frames.
+        // Bug pre-fix: el translate(width/2, height/2) sin pop causaba drift del
+        // centro del mandala después de N frames (700px en 60 frames medidos).
+        sketch.push();
         sketch.translate(sketch.width / 2, sketch.height / 2);
-        
-        const layers = 12;
+
         const audioBoost = audioEnabled && audioLevel > 0.01 ? 1 + audioLevel * 1.2 : 1;
         rotation += 0.008 * audioBoost;
-        
-        for (let layer = 0; layer < layers; layer++) {
+
+        // Pre-computar petal counts por layer (constantes — no cambian)
+        const petalCounts = new Array(LAYERS);
+        for (let l = 0; l < LAYERS; l++) petalCounts[l] = 8 + l * 3;
+
+        for (let layer = 0; layer < LAYERS; layer++) {
           const layerRotation = rotation * (1 + layer * 0.08);
           const radius = 40 + layer * 35;
-          const petals = 8 + layer * 3;
-          
+          const petals = petalCounts[layer];
+
+          // Pre-computar (2π / petals) una sola vez por layer
+          const angleStep = TWO_PI / petals;
+
           sketch.push();
           sketch.rotate(layerRotation);
-          
+
           for (let i = 0; i < petals; i++) {
-            const angle = (Math.PI * 2 / petals) * i;
-            const x = radius * Math.cos(angle);
-            const y = radius * Math.sin(angle);
-            
+            const angle = angleStep * i;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const x = radius * cos;
+            const y = radius * sin;
+
             const size = 20 + Math.sin(layerRotation * 2 + i) * 10;
             const audioSize = audioLevel * 15;
-            
+            const radiusMean = (size + audioSize) / 2;
+
             // Mandala tipo Alex Gray - geométrico y luminoso pero oscuro
-            const hue = (180 + layer * 15 + i * 10 + rotation * 30) % 360; // Azules/verdes
+            const hue = (180 + layer * 15 + i * 10 + rotation * 30) % 360;
             const sat = 30 + audioLevel * 20;
             const bright = 25 + audioLevel * 30;
-            
+
             sketch.fill(hue, sat, bright);
             sketch.stroke(hue, sat + 10, bright + 10);
             sketch.strokeWeight(0.5);
-            
+
             sketch.push();
             sketch.translate(x, y);
             sketch.rotate(angle);
-            // Forma más geométrica - polígono en lugar de círculo
+
+            // Forma geométrica: hexágono con vértices pre-computados.
             sketch.beginShape();
-            for (let j = 0; j < 6; j++) {
-              const a = (Math.PI * 2 / 6) * j;
-              const r = (size + audioSize) / 2;
-              sketch.vertex(r * Math.cos(a), r * Math.sin(a));
+            for (let j = 0; j < SIDES; j++) {
+              sketch.vertex(radiusMean * hexCos[j], radiusMean * hexSin[j]);
             }
             sketch.endShape(sketch.CLOSE);
             sketch.pop();
           }
-          
+
           sketch.pop();
         }
+
+        sketch.pop(); // cierra el translate(width/2, height/2)
       }
     };
   },
