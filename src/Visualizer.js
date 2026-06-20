@@ -15,6 +15,7 @@ import { createFpsCounter } from './perf/fpsCounter.js';
 import { detectProfile } from './perf/deviceProfile.js';
 
 let p5Instance = null;
+let p5Sketch = null;
 let currentEffect = null;
 let currentEffectName = null;
 let renderLoop = null;
@@ -61,6 +62,7 @@ export function startVisualizer(effectName = 'tunnel', container = null) {
       config = { isLite: false };
 
       currentEffectName = effectName;
+      p5Sketch = sketch;
       currentEffect = Effects[effectName](sketch);
 
       fpsCounter = createFpsCounter();
@@ -98,7 +100,7 @@ export function changeEffect(effectName) {
     startVisualizer(effectName);
     return;
   }
-  const sk = p5Instance;
+  const sk = p5Sketch || p5Instance;
   currentEffectName = effectName;
   currentEffect = Effects[effectName](sk);
 }
@@ -114,6 +116,7 @@ export function getAvailableEffects() {
 export function stopVisualizer() {
   if (renderLoop) { renderLoop.stop(); renderLoop = null; }
   if (p5Instance) { p5Instance.remove(); p5Instance = null; }
+  p5Sketch = null;
   currentEffect = null;
   currentEffectName = null;
   fpsCounter = null;
