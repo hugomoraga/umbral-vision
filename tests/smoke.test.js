@@ -28,7 +28,7 @@ const stubSketch = () => {
 
 describe('package metadata', () => {
   it('has correct name and version', () => {
-    expect(pkg.name).toBe('@hugomoraga/umbral-vision');
+    expect(pkg.name).toBe('@kndl/umbral-vision');
     expect(pkg.version).toBe('0.1.0');
   });
 
