@@ -113,8 +113,10 @@ export const Effects = {
   mandala: (sketch) => {
     let rotation = 0;
 
-    // ponytail: constantes pre-computadas que no dependen del frame
-    const LAYERS = 12;
+    // ponytail: constantes pre-computadas (no cambian entre frames).
+    // LITE reduce ~50% elementos: 6 layers × ~14 pétalos vs 12 × ~24.
+    const LAYERS_FULL = 12;
+    const LAYERS_LITE = 6;
     const SIDES = 6;
     const TWO_PI = Math.PI * 2;
     const TWO_PI_OVER_SIX = TWO_PI / SIDES;
@@ -126,20 +128,20 @@ export const Effects = {
     }
 
     return {
-      draw: () => {
+      draw: (config) => {
+        const isLite = !!(config && config.isLite);
+        const LAYERS = isLite ? LAYERS_LITE : LAYERS_FULL;
+
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 8);
 
-        // Wrap el translate al centro en push/pop para que no acumule entre frames.
-        // Bug pre-fix: el translate(width/2, height/2) sin pop causaba drift del
-        // centro del mandala después de N frames (700px en 60 frames medidos).
+        // Wrap el translate al centro en push/pop (fix drift).
         sketch.push();
         sketch.translate(sketch.width / 2, sketch.height / 2);
 
         const audioBoost = audioEnabled && audioLevel > 0.01 ? 1 + audioLevel * 1.2 : 1;
         rotation += 0.008 * audioBoost;
 
-        // Pre-computar petal counts por layer (constantes — no cambian)
         const petalCounts = new Array(LAYERS);
         for (let l = 0; l < LAYERS; l++) petalCounts[l] = 8 + l * 3;
 
@@ -147,8 +149,6 @@ export const Effects = {
           const layerRotation = rotation * (1 + layer * 0.08);
           const radius = 40 + layer * 35;
           const petals = petalCounts[layer];
-
-          // Pre-computar (2π / petals) una sola vez por layer
           const angleStep = TWO_PI / petals;
 
           sketch.push();
@@ -165,7 +165,6 @@ export const Effects = {
             const audioSize = audioLevel * 15;
             const radiusMean = (size + audioSize) / 2;
 
-            // Mandala tipo Alex Gray - geométrico y luminoso pero oscuro
             const hue = (180 + layer * 15 + i * 10 + rotation * 30) % 360;
             const sat = 30 + audioLevel * 20;
             const bright = 25 + audioLevel * 30;
@@ -178,7 +177,6 @@ export const Effects = {
             sketch.translate(x, y);
             sketch.rotate(angle);
 
-            // Forma geométrica: hexágono con vértices pre-computados.
             sketch.beginShape();
             for (let j = 0; j < SIDES; j++) {
               sketch.vertex(radiusMean * hexCos[j], radiusMean * hexSin[j]);
@@ -190,7 +188,7 @@ export const Effects = {
           sketch.pop();
         }
 
-        sketch.pop(); // cierra el translate(width/2, height/2)
+        sketch.pop();
       }
     };
   },
@@ -312,49 +310,65 @@ export const Effects = {
    */
   fractal: (sketch) => {
     let angle = 0;
-    
+
+    // ponytail: pre-computar constantes que no cambian entre frames.
+    // BRANCHES_ANGLE_STEP es const por branches (no por iteración).
+    const BRANCHES_FULL = 6;
+    const BRANCHES_LITE = 4;
+    const MAX_DEPTH_FULL = 4; // antes era 6 (6^6=46656 nodos = 41M ops/frame)
+    const MAX_DEPTH_LITE = 3; // 4^3=64 nodos vs 6^4=1296 (modo lite 3 niveles)
+    const TWO_PI = Math.PI * 2;
+
     return {
-      draw: () => {
+      draw: (config) => {
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 5);
+
+        // Wrap translate al centro en push/pop (fix drift).
+        sketch.push();
         sketch.translate(sketch.width / 2, sketch.height / 2);
-        
+
+        const isLite = !!(config && config.isLite);
         const audioBoost = audioEnabled && audioLevel > 0.01 ? 1 + audioLevel * 1.5 : 1;
         angle += 0.008 * audioBoost;
-        
-        const branches = 6;
-        const maxDepth = 6;
+
+        const branches = isLite ? BRANCHES_LITE : BRANCHES_FULL;
+        const maxDepth = isLite ? MAX_DEPTH_LITE : MAX_DEPTH_FULL;
+        const branchStep = TWO_PI / branches;
         const baseLength = 90;
-        
+
+        // Función interna — captura angle, audioLevel, maxDepth por closure.
         function drawBranch(len, depth, rot) {
           if (depth === 0) return;
-          
+
           // Paleta oscura tipo Alex Gray - geométrica y luminosa
-          const hue = (190 + depth * 12 + angle * 20) % 360; // Azules/verdes
+          const hue = (190 + depth * 12 + angle * 20) % 360;
           const sat = 30 + audioLevel * 15;
           const bright = 20 + audioLevel * 25;
-          
+
           sketch.stroke(hue, sat, bright);
           sketch.strokeWeight(depth * 1.5 + audioLevel * 2);
-          
+
           sketch.push();
           sketch.rotate(rot);
           sketch.line(0, 0, 0, -len);
           sketch.translate(0, -len);
-          
+
           for (let i = 0; i < branches; i++) {
-            const branchAngle = (Math.PI * 2 / branches) * i + angle * 0.4;
+            const branchAngle = branchStep * i + angle * 0.4;
             const newLen = len * 0.72 * (1 + audioLevel * 0.25);
             drawBranch(newLen, depth - 1, branchAngle);
           }
-          
+
           sketch.pop();
         }
-        
+
         for (let i = 0; i < branches; i++) {
-          const startAngle = (Math.PI * 2 / branches) * i;
+          const startAngle = branchStep * i;
           drawBranch(baseLength * (1 + audioLevel * 0.5), maxDepth, startAngle + angle);
         }
+
+        sketch.pop();
       }
     };
   },
@@ -627,31 +641,38 @@ export const Effects = {
    */
   waveGlitch: (sketch) => {
     let time = 0;
+    const WAVE_COUNT_FULL = 8;
+    const WAVE_COUNT_LITE = 4;
+    const X_STEP_FULL = 3;
+    const X_STEP_LITE = 6;
+    const TWO_PI = Math.PI * 2;
     const wavePhases = []; // Fase inicial de cada onda
     const modulationPhases = []; // Fase de modulación para cada onda
     let initialized = false;
-    
+
     return {
-      draw: () => {
+      draw: (config) => {
+        const isLite = !!(config && config.isLite);
+        const waveCount = isLite ? WAVE_COUNT_LITE : WAVE_COUNT_FULL;
+        const xStep = isLite ? X_STEP_LITE : X_STEP_FULL;
+
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 15);
         time += 0.08;
-        
-        const waveCount = 8;
-        
-        // Inicializar fases individuales para cada onda
+
+        // Inicializar fases individuales para cada onda (lazy, primera vez).
         if (!initialized) {
-          for (let w = 0; w < waveCount; w++) {
-            wavePhases[w] = Math.random() * Math.PI * 2; // Fase inicial aleatoria
-            modulationPhases[w] = Math.random() * Math.PI * 2; // Fase de modulación aleatoria
+          for (let w = 0; w < WAVE_COUNT_FULL; w++) {
+            wavePhases[w] = Math.random() * TWO_PI;
+            modulationPhases[w] = Math.random() * TWO_PI;
           }
           initialized = true;
         }
-        
+
         const audioBoost = audioEnabled && audioLevel > 0.01 ? audioLevel : 0.1;
         const glitchIntensity = audioLevel * 40;
         const centerY = sketch.height / 2;
-        
+
         for (let w = 0; w < waveCount; w++) {
           // Velocidad y dirección única para cada onda
           const waveSpeed = (0.15 + w * 0.05) * (w % 2 === 0 ? 1 : -1);
@@ -683,7 +704,7 @@ export const Effects = {
           sketch.stroke(hue, sat, bright);
           sketch.strokeWeight(1.2 + audioLevel * 1.5);
           
-          for (let x = 0; x < sketch.width; x += 3) {
+          for (let x = 0; x < sketch.width; x += xStep) {
             // Onda que se mueve horizontalmente con amplitud modulada
             const phase = x * frequency + wavePhases[w] + w * 0.5;
             let y = centerY + 
@@ -845,69 +866,92 @@ export const Effects = {
    */
   dune: (sketch) => {
     let time = 0;
-    
+
+    // ponytail: pre-computar step horizontal y constantes fuera del loop.
+    const WAVES_FULL = 4;
+    const WAVES_LITE = 2;
+    const GEO_SIDES = 6;
+    const TWO_PI_OVER_SIX = Math.PI * 2 / GEO_SIDES;
+    const geoCos = new Float32Array(GEO_SIDES);
+    const geoSin = new Float32Array(GEO_SIDES);
+    const innerCos = new Float32Array(GEO_SIDES);
+    const innerSin = new Float32Array(GEO_SIDES);
+    for (let i = 0; i < GEO_SIDES; i++) {
+      geoCos[i] = Math.cos(TWO_PI_OVER_SIX * i);
+      geoSin[i] = Math.sin(TWO_PI_OVER_SIX * i);
+      innerCos[i] = Math.cos(TWO_PI_OVER_SIX * i + Math.PI / 6);
+      innerSin[i] = Math.sin(TWO_PI_OVER_SIX * i + Math.PI / 6);
+    }
+
     return {
-      draw: () => {
+      draw: (config) => {
+        const isLite = !!(config && config.isLite);
+        const WAVES = isLite ? WAVES_LITE : WAVES_FULL;
+
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 5);
         time += 0.03;
-        
+
         const audioBoost = audioEnabled && audioLevel > 0.01 ? audioLevel : 0.1;
         const centerY = sketch.height * 0.6;
-        
+        // Step horizontal más grueso en lite mode → menos vértices.
+        const xStep = isLite ? 4 : 2;
+
         // Ondas de arena
-        for (let w = 0; w < 4; w++) {
+        for (let w = 0; w < WAVES; w++) {
           const waveHeight = 30 + w * 20;
           const frequency = 0.01 + w * 0.005;
           const speed = 0.03 + w * 0.01;
-          
+
           sketch.beginShape();
           sketch.noFill();
-          
+
           // Paleta tipo Dune - dorados/ocres oscuros
           const hue = (25 + w * 3 + time * 2) % 360;
           const sat = 20 + audioLevel * 15;
           const bright = 15 + audioLevel * 25;
-          
+
           sketch.stroke(hue, sat, bright);
           sketch.strokeWeight(2 + audioLevel * 2);
-          
-          for (let x = 0; x < sketch.width; x += 2) {
-            const y = centerY + 
+
+          for (let x = 0; x < sketch.width; x += xStep) {
+            const y = centerY +
               Math.sin(x * frequency + time * speed + w) * waveHeight * (1 + audioBoost) +
               Math.cos(x * frequency * 0.6 + time * 1.2) * waveHeight * 0.3 * audioBoost;
             sketch.vertex(x, y);
           }
           sketch.endShape();
         }
-        
-        // Geometría tipo Dune - formas minimalistas
+
+        // Geometría tipo Dune - formas minimalistas.
+        // Wrap translate al centro en push/pop (fix drift).
+        sketch.push();
         sketch.translate(sketch.width / 2, sketch.height * 0.3);
         const geoSize = 80 + audioLevel * 40;
         const geoRotation = time * 0.02;
-        
+
         sketch.push();
         sketch.rotate(geoRotation);
-        
+
         const geoHue = (30 + time * 3) % 360;
         const geoSat = 15 + audioLevel * 10;
         const geoBright = 20 + audioLevel * 20;
-        
+
         sketch.stroke(geoHue, geoSat, geoBright);
         sketch.strokeWeight(1.5 + audioLevel * 1.5);
         sketch.noFill();
-        
+
         // Forma geométrica simple tipo Dune
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI * 2 / 6) * i;
-          const x1 = geoSize * Math.cos(angle);
-          const y1 = geoSize * Math.sin(angle);
-          const x2 = geoSize * 0.6 * Math.cos(angle + Math.PI / 6);
-          const y2 = geoSize * 0.6 * Math.sin(angle + Math.PI / 6);
+        for (let i = 0; i < GEO_SIDES; i++) {
+          const x1 = geoSize * geoCos[i];
+          const y1 = geoSize * geoSin[i];
+          const x2 = geoSize * 0.6 * innerCos[i];
+          const y2 = geoSize * 0.6 * innerSin[i];
           sketch.line(x1, y1, x2, y2);
         }
-        
+
         sketch.pop();
+        sketch.pop(); // cierra el translate(width/2, height*0.3)
       }
     };
   },

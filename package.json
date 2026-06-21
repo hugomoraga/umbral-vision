@@ -1,6 +1,6 @@
 {
   "name": "@kndl/umbral-vision",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Framework modular para generación de visuales psicodélicos con p5.js",
   "type": "module",
   "main": "./dist/index.cjs",

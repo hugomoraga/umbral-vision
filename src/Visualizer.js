@@ -71,7 +71,7 @@ export function startVisualizer(effectName = 'tunnel', container = null) {
         fpsCounter,
         onFrame: () => {
           if (currentEffect && currentEffect.draw) {
-            currentEffect.draw();
+            currentEffect.draw(config);
           }
         }
       });
