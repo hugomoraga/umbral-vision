@@ -276,6 +276,13 @@ export function createEngine(options = {}) {
   function hide() {
     if (!renderer) return;
     stop();
+    // Si se oculta en medio de un cross-fade, liberar el efecto saliente;
+    // de lo contrario queda congelado y retiene recursos.
+    if (outgoing) {
+      outgoing.dispose();
+      outgoing = null;
+    }
+    transition = null;
     renderer.canvas.style.display = 'none';
   }
 
