@@ -112,7 +112,7 @@ export function createEngine(options = {}) {
     fpsCounter.tick(deltaMs);
 
     const dt = clampDt(deltaMs / 1000);
-    tickAudio();
+    tickAudio(dt);
     const audio = getAudioFeatures();
 
     const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -164,8 +164,15 @@ export function createEngine(options = {}) {
 
     const sceneFrom = outgoing ? outgoing.getSceneTarget() : null;
     const sceneTo = effect.getSceneTarget();
+    const basePost = effect.getPostParams();
+    const audioAmount = audio.enabled ? (effect.params?.audio ?? 1) : 0;
+    const audioPost = {
+      exposure: (basePost.exposure ?? 1) * (1 + (audio.rms * 0.35 + audio.beat * 0.15) * audioAmount),
+      bloomStrength: (basePost.bloomStrength ?? 1) * (1 + (audio.high * 0.42 + audio.beat * 0.5 + audio.rms * 0.2) * audioAmount)
+    };
     post.render(sceneFrom || sceneTo, renderer.output, {
-      ...effect.getPostParams(),
+      ...basePost,
+      ...audioPost,
       ...postOverrides
     }, sceneFrom ? sceneTo : null, mix);
 

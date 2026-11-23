@@ -24,14 +24,15 @@ export function createRenderLoop({ targetFps = 60, fpsCounter, onFrame }) {
     const visible = document.visibilityState === 'visible';
     const currentInterval = visible ? interval : 200; // eslint-disable-line no-unused-vars
 
+    let delta = 0;
     if (lastFrameTime > 0) {
-      const delta = now - lastFrameTime;
+      delta = now - lastFrameTime;
       if (fpsCounter) fpsCounter.tick(delta);
     }
     lastFrameTime = now;
 
     if (visible) {
-      tickAudio();
+      tickAudio(delta > 0 ? delta / 1000 : 1 / 60);
       try {
         onFrame({ now, fpsCounter, audio: getAudioState() });
       } catch (err) {

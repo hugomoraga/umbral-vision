@@ -6,7 +6,7 @@
 
 Framework modular para generación de visuales psicodélicos en tiempo real con [p5.js](https://p5js.org/). Desde v0.4 incluye un **motor de renderizado GPU (WebGL 2)** para visuales procedurales de nueva generación.
 
-![Fluid Fields](https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/fluid-fields.png)
+![Studio](https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/studio.png)
 
 ## Motor GPU (v0.4)
 
@@ -22,8 +22,10 @@ Cuatro familias visuales con técnicas distintas:
 - Simulación GPU con texturas ping-pong (MRT) y estado determinista por seed.
 - Pipeline HDR: bright pass, bloom multi-mip, tonemap ACES, viñeta, grano y aberración.
 - **Cross-fade** entre efectos GPU antes del bloom.
-- Audio reactivo real: bajos → deformación/velocidad, medios → flujo, agudos → brillo,
-  RMS → energía y beat detection con smoothing.
+- **Audio reactivo profundo**: bandas graves/medios/agudos con deformación distinta,
+  volumen RMS, spectral flux / beat, y espectro en vivo con medidores B/M/A.
+- **Studio UI**: panel por tabs, parámetros agrupados, presets, dock de efectos,
+  transporte, modo inmersivo con auto-hide y responsive móvil.
 - Perfiles `lite` / `high` / `ultra` + resolución adaptativa.
 - El motor es independiente de la UI; los 15 efectos p5 siguen intactos.
 
@@ -181,8 +183,13 @@ Efectos GPU (no usan p5):
 - `temporalVeil` — Feedback temporal con estelas y distorsión
 
 Transiciones: `changeEffect('organicStructures')` hace cross-fade GPU de ~1 s.
-La UI del generador muestra un panel de parámetros generado desde el schema del efecto
-activo; los valores se conservan por efecto y se pueden compartir por URL (`p=`).
+La studio UI muestra parámetros generados desde el schema, los conserva por efecto y
+los comparte por URL (`p=`). La interfaz se oculta sola al quedar inactiva y vuelve al
+mover el mouse; `H` alterna el modo inmersivo.
+
+Espectro y bandas en vivo:
+
+![Studio con audio](https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/studio-audio.png)
 
 ## Peer Dependencies
 

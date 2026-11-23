@@ -29,7 +29,7 @@ const stubSketch = () => {
 describe('package metadata', () => {
   it('has correct name and version', () => {
     expect(pkg.name).toBe('@kndl/umbral-vision');
-    expect(pkg.version).toBe('0.6.0');
+    expect(pkg.version).toBe('0.7.0');
   });
 
   it('has main, module and exports', () => {

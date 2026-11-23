@@ -13,19 +13,19 @@ import { createFullscreenQuad } from '../core/Geometry.js';
 import { TEMPORAL_VERT, TEMPORAL_FRAG } from '../shaders/temporal.js';
 
 export const TEMPORAL_SCHEMA = {
-  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad' },
-  decay: { type: 'number', default: 0.93, min: 0.7, max: 0.998, label: 'Persistencia' },
-  zoom: { type: 'number', default: 0.55, min: 0.0, max: 1.0, label: 'Zoom' },
-  rotation: { type: 'number', default: 0.45, min: -1.0, max: 1.0, label: 'Rotación' },
-  warp: { type: 'number', default: 0.55, min: 0.0, max: 1.5, label: 'Distorsión' },
-  density: { type: 'number', default: 0.30, min: 0.05, max: 1.5, label: 'Densidad' },
-  hue: { type: 'number', default: 0.62, min: 0.0, max: 1.0, label: 'Tono' },
-  saturation: { type: 'number', default: 0.9, min: 0.0, max: 1.0, label: 'Saturación' },
-  glow: { type: 'number', default: 0.85, min: 0.2, max: 4.0, label: 'Glow' },
-  bloom: { type: 'number', default: 0.7, min: 0.0, max: 3.0, label: 'Bloom' },
-  exposure: { type: 'number', default: 0.95, min: 0.2, max: 3.0, label: 'Exposición' },
-  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio' },
-  seed: { type: 'int', default: 9, min: 0, max: 2147483647, label: 'Seed' }
+  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad', group: 'Movimiento' },
+  decay: { type: 'number', default: 0.93, min: 0.7, max: 0.998, label: 'Persistencia', group: 'Forma' },
+  zoom: { type: 'number', default: 0.55, min: 0.0, max: 1.0, label: 'Zoom', group: 'Forma' },
+  rotation: { type: 'number', default: 0.45, min: -1.0, max: 1.0, label: 'Rotación', group: 'Forma' },
+  warp: { type: 'number', default: 0.55, min: 0.0, max: 1.5, label: 'Distorsión', group: 'Forma' },
+  density: { type: 'number', default: 0.30, min: 0.05, max: 1.5, label: 'Densidad', group: 'Forma' },
+  hue: { type: 'number', default: 0.62, min: 0.0, max: 1.0, label: 'Tono', group: 'Apariencia' },
+  saturation: { type: 'number', default: 0.9, min: 0.0, max: 1.0, label: 'Saturación', group: 'Apariencia' },
+  glow: { type: 'number', default: 0.85, min: 0.2, max: 4.0, label: 'Glow', group: 'Apariencia' },
+  bloom: { type: 'number', default: 0.7, min: 0.0, max: 3.0, label: 'Bloom', group: 'Apariencia' },
+  exposure: { type: 'number', default: 0.95, min: 0.2, max: 3.0, label: 'Exposición', group: 'Apariencia' },
+  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio', group: 'Comportamiento' },
+  seed: { type: 'int', default: 9, min: 0, max: 2147483647, label: 'Seed', group: 'Comportamiento' }
 };
 
 const FALLBACK_AUDIO = Object.freeze({
@@ -92,8 +92,8 @@ export class TemporalVeil extends Effect {
       .set('uTime', this.time)
       .set('uDt', Math.min(0.05, this.dt || 1 / 60))
       .set('uDecay', p.decay)
-      .set('uZoom', p.zoom * p.speed)
-      .set('uRotation', p.rotation * p.speed)
+      .set('uZoom', p.zoom * p.speed * (1 + audio.bass * a * 0.8))
+      .set('uRotation', p.rotation * p.speed * (1 + audio.mid * a * 0.7 + audio.beat * a * 0.4))
       .set('uWarp', p.warp)
       .set('uDensity', p.density)
       .set('uHue', p.hue)

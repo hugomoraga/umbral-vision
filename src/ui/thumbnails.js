@@ -31,10 +31,14 @@ const LABELS = {
   temporalVeil: 'Temporal Veil'
 };
 
-export function createThumbnails(container, effects, onSelect) {
+export function createThumbnails(container, effects, onSelect, options = {}) {
   if (!container || !effects) return null;
 
-  const names = Object.keys(effects).sort();
+  const labels = { ...LABELS, ...(options.labels || {}) };
+  const available = Object.keys(effects);
+  const names = Array.isArray(options.order) && options.order.length > 0
+    ? options.order.filter((n) => available.includes(n)).concat(available.filter((n) => !options.order.includes(n)))
+    : available.sort();
   const liteMode = isLiteRecommended();
   const buttons = new Map();
 
@@ -42,7 +46,7 @@ export function createThumbnails(container, effects, onSelect) {
     const btn = document.createElement('button');
     btn.className = 'thumb';
     btn.type = 'button';
-    btn.setAttribute('aria-label', LABELS[name] || name);
+    btn.setAttribute('aria-label', labels[name] || name);
     btn.setAttribute('aria-pressed', 'false');
     btn.dataset.effectName = name;
 
@@ -56,7 +60,7 @@ export function createThumbnails(container, effects, onSelect) {
 
     const label = document.createElement('span');
     label.className = 'thumb-label';
-    label.textContent = LABELS[name] || name;
+    label.textContent = labels[name] || name;
     btn.appendChild(label);
 
     if (!liteMode) {
@@ -82,8 +86,10 @@ export function createThumbnails(container, effects, onSelect) {
           if (typeof entry.preview === 'function') {
             entry.preview(ctx, previewEl.width, previewEl.height, 0.6);
           } else {
+            // Varios frames: algunos efectos p5 necesitan tiempo para salir del negro.
             const sk = createPreviewSketch(previewEl);
-            entry(sk).draw();
+            const fx = entry(sk);
+            for (let i = 0; i < 4; i++) fx.draw();
           }
         } catch { /* preview opcional */ }
       }

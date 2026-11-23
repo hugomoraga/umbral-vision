@@ -13,7 +13,7 @@ const TIPS = [
   { keys: ['←', '→'], text: 'Efecto anterior / siguiente' },
   { keys: ['Espacio'], text: 'Auto-transición on/off' },
   { keys: ['F'], text: 'Pantalla completa' },
-  { keys: ['H'], text: 'Ocultar / mostrar panel' },
+  { keys: ['H'], text: 'Ocultar / mostrar interfaz' },
   { keys: ['M'], text: 'Activar / desactivar micrófono' }
 ];
 
@@ -101,7 +101,7 @@ function createOverlay() {
   card.appendChild(ul);
 
   const btn = document.createElement('button');
-  btn.className = 'btn primary onboarding-dismiss';
+  btn.className = 'uv-btn uv-btn-primary onboarding-dismiss';
   btn.textContent = 'Entendido';
   card.appendChild(btn);
 

@@ -24,19 +24,19 @@ import { mulberry32 } from '../math/random.js';
 const TAU = Math.PI * 2;
 
 export const FLUID_FIELDS_SCHEMA = {
-  density: { type: 'number', default: 0.9, min: 0.1, max: 1.0, label: 'Densidad' },
-  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad' },
-  amplitude: { type: 'number', default: 0.62, min: 0.0, max: 2.0, label: 'Amplitud' },
-  complexity: { type: 'number', default: 0.62, min: 0.0, max: 1.0, label: 'Complejidad' },
-  turbulence: { type: 'number', default: 0.55, min: 0.0, max: 1.5, label: 'Turbulencia' },
-  hue: { type: 'number', default: 0.56, min: 0.0, max: 1.0, label: 'Tono' },
-  saturation: { type: 'number', default: 0.9, min: 0.0, max: 1.0, label: 'Saturación' },
-  glow: { type: 'number', default: 0.68, min: 0.2, max: 4.0, label: 'Glow' },
-  particleSize: { type: 'number', default: 1.0, min: 0.4, max: 3.0, label: 'Tamaño' },
-  bloom: { type: 'number', default: 0.85, min: 0.0, max: 3.0, label: 'Bloom' },
-  exposure: { type: 'number', default: 0.98, min: 0.2, max: 3.0, label: 'Exposición' },
-  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio' },
-  seed: { type: 'int', default: 1, min: 0, max: 2147483647, label: 'Seed' }
+  density: { type: 'number', default: 0.9, min: 0.1, max: 1.0, label: 'Densidad', group: 'Forma' },
+  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad', group: 'Movimiento' },
+  amplitude: { type: 'number', default: 0.62, min: 0.0, max: 2.0, label: 'Amplitud', group: 'Movimiento' },
+  complexity: { type: 'number', default: 0.62, min: 0.0, max: 1.0, label: 'Complejidad', group: 'Forma' },
+  turbulence: { type: 'number', default: 0.55, min: 0.0, max: 1.5, label: 'Turbulencia', group: 'Movimiento' },
+  hue: { type: 'number', default: 0.56, min: 0.0, max: 1.0, label: 'Tono', group: 'Apariencia' },
+  saturation: { type: 'number', default: 0.9, min: 0.0, max: 1.0, label: 'Saturación', group: 'Apariencia' },
+  glow: { type: 'number', default: 0.68, min: 0.2, max: 4.0, label: 'Glow', group: 'Apariencia' },
+  particleSize: { type: 'number', default: 1.0, min: 0.4, max: 3.0, label: 'Tamaño', group: 'Forma' },
+  bloom: { type: 'number', default: 0.85, min: 0.0, max: 3.0, label: 'Bloom', group: 'Apariencia' },
+  exposure: { type: 'number', default: 0.98, min: 0.2, max: 3.0, label: 'Exposición', group: 'Apariencia' },
+  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio', group: 'Comportamiento' },
+  seed: { type: 'int', default: 1, min: 0, max: 2147483647, label: 'Seed', group: 'Comportamiento' }
 };
 
 const FALLBACK_AUDIO = Object.freeze({
@@ -71,6 +71,7 @@ export class FluidFields extends Effect {
     this.eye = [0, 0, 4.8];
     this.lightPos = [2.2, 1.8, 2.4];
     this.lastAudio = null;
+    this.audioPhase = 0;
 
     if (!this.simFormat) {
       throw new Error('WebGL 2 sin soporte de render a texturas float (se requiere EXT_color_buffer_float)');
@@ -226,17 +227,23 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
   update(dt, audio = FALLBACK_AUDIO) {
     super.update(dt, audio);
     this.lastAudio = audio;
+    const p = this.params;
+    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const bass = audio.bass * a;
+    const mid = audio.mid * a;
+    const beat = audio.beat * a;
+    this.audioPhase += dt * (mid * 0.3 + beat * 0.9);
 
     this._stepSimulation(Math.min(0.033, Math.max(0.0, dt)), audio);
 
     // Cámara: órbita lenta + parallax sutil del puntero.
     const t = this.time;
     const pointer = this.renderer.pointer || { x: 0, y: 0 };
-    const radius = 4.9 + Math.sin(t * 0.09) * 0.35;
-    const angle = t * 0.11 + pointer.x * 0.22;
+    const radius = 4.9 - bass * 0.65 - beat * 0.4 + Math.sin(t * 0.09) * 0.35;
+    const angle = t * 0.11 + this.audioPhase + pointer.x * 0.22;
     this.eye = [
       Math.sin(angle) * radius,
-      Math.sin(t * 0.07) * 1.15 + pointer.y * 0.9,
+      Math.sin(t * 0.07) * 1.15 + pointer.y * 0.9 + beat * 0.35,
       Math.cos(angle) * radius
     ];
     const view = lookAt(this.eye, [0, 0, 0], [0, 1, 0]);

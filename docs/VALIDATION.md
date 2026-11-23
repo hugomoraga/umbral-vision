@@ -1,9 +1,9 @@
 # Validación en la aplicación real (kndl000)
 
 Fecha: 2026-11-23
-Versión validada: **0.6.0** (`5319c23`)
+Versión validada: **0.7.0**
 
-![Generador con Fluid Fields](media/app-generator.png)
+![Studio](media/studio.png)
 
 ## Entorno
 
@@ -48,6 +48,34 @@ Versión validada: **0.6.0** (`5319c23`)
 | Errores | **0** |
 
 ![Panel de parámetros](media/app-params.png)
+
+## Rediseño studio + audio dinámico (v0.7.0)
+
+| Comprobación | Resultado |
+|---|---|
+| UI studio en desktop 1440×900 | 19 efectos, panel por tabs, dock, transporte y top bar |
+| Auto-hide de interfaz | oculta topbar/panel/transporte/dock a los 4.2 s |
+| Revelar interfaz | pointermove / H la restauran |
+| Modo inmersivo | canvas a pantalla completa sin chrome |
+| Móvil 390×844 | dock vertical compacto, panel overlay, sin solapamientos |
+| Espectro | canvas 156×34, 42 barras + medidores B/M/A |
+| Separación de bandas | grave: `bass 1.05 / mid 0.20 / high 0.03` |
+| | medio: `bass 0.40 / mid 0.51 / high 0.07` |
+| | agudo: `bass 0.32 / mid 0.20 / high 0.33` |
+| Volumen | `rms` varió 0.29–0.64 con swells del WAV |
+| Beat | spectral flux detecta transitorios; `beat` llega a 1 |
+| Reactividad visual | cámara, escala, ondulación, shimmer, warp y bloom cambian por banda |
+| Errores consola | **0** |
+
+### Incidencias de esta ronda
+
+1. **Normalización por banda** (corregida): cada banda se normalizaba contra su propio
+   peak, así que todas terminaban con el mismo valor y el efecto parecía estático.
+   Ahora hay una ganancia global que conserva la relación graves/medios/agudos.
+2. **`H` competía consigo mismo** (corregida): el listener global de revelado y el
+   atajo de teclado se ejecutaban en el mismo evento. `H` queda excluido del revelado.
+3. **Analizador demasiado suavizado** (corregido): se redujo `smoothingTimeConstant`
+   a 0.35, FFT a 2048 y el smoothing propio ahora depende de `dt`.
 
 ## Incidencias encontradas y corregidas
 

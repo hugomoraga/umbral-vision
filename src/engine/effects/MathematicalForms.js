@@ -13,17 +13,17 @@ import { createFullscreenQuad } from '../core/Geometry.js';
 import { MATH_VERT, MATH_FRAG } from '../shaders/mathematical.js';
 
 export const MATH_SCHEMA = {
-  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad' },
-  power: { type: 'number', default: 7.6, min: 3.0, max: 12.0, label: 'Potencia' },
-  warp: { type: 'number', default: 0.35, min: 0.0, max: 1.5, label: 'Warp' },
-  detail: { type: 'number', default: 0.55, min: 0.0, max: 1.0, label: 'Detalle' },
-  hue: { type: 'number', default: 0.58, min: 0.0, max: 1.0, label: 'Tono' },
-  saturation: { type: 'number', default: 0.85, min: 0.0, max: 1.0, label: 'Saturación' },
-  glow: { type: 'number', default: 0.95, min: 0.2, max: 4.0, label: 'Glow' },
-  bloom: { type: 'number', default: 0.58, min: 0.0, max: 3.0, label: 'Bloom' },
-  exposure: { type: 'number', default: 0.88, min: 0.2, max: 3.0, label: 'Exposición' },
-  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio' },
-  seed: { type: 'int', default: 5, min: 0, max: 2147483647, label: 'Seed' }
+  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad', group: 'Movimiento' },
+  power: { type: 'number', default: 7.6, min: 3.0, max: 12.0, label: 'Potencia', group: 'Forma' },
+  warp: { type: 'number', default: 0.35, min: 0.0, max: 1.5, label: 'Warp', group: 'Forma' },
+  detail: { type: 'number', default: 0.55, min: 0.0, max: 1.0, label: 'Detalle', group: 'Forma' },
+  hue: { type: 'number', default: 0.58, min: 0.0, max: 1.0, label: 'Tono', group: 'Apariencia' },
+  saturation: { type: 'number', default: 0.85, min: 0.0, max: 1.0, label: 'Saturación', group: 'Apariencia' },
+  glow: { type: 'number', default: 0.95, min: 0.2, max: 4.0, label: 'Glow', group: 'Apariencia' },
+  bloom: { type: 'number', default: 0.58, min: 0.0, max: 3.0, label: 'Bloom', group: 'Apariencia' },
+  exposure: { type: 'number', default: 0.88, min: 0.2, max: 3.0, label: 'Exposición', group: 'Apariencia' },
+  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio', group: 'Comportamiento' },
+  seed: { type: 'int', default: 5, min: 0, max: 2147483647, label: 'Seed', group: 'Comportamiento' }
 };
 
 const FALLBACK_AUDIO = Object.freeze({
@@ -74,9 +74,9 @@ export class MathematicalForms extends Effect {
     const pointer = this.renderer.pointer || { x: 0, y: 0 };
     const a = p.audio > 0 && audio.enabled ? p.audio : 0;
 
-    const radius = 3.35 - audio.bass * a * 0.35 + Math.sin(t * 0.1) * 0.16;
-    const angle = t * 0.12 * p.speed + pointer.x * 0.25 + (p.seed | 0) * 0.013;
-    const height = Math.sin(t * 0.09) * 1.6 + pointer.y * 0.9;
+    const radius = 3.35 - audio.bass * a * 1.25 - audio.beat * a * 0.55 + Math.sin(t * 0.1) * 0.16;
+    const angle = t * 0.12 * p.speed * (1 + audio.bass * a * 1.2) + pointer.x * 0.25 + (p.seed | 0) * 0.013;
+    const height = Math.sin(t * 0.09) * 1.6 + pointer.y * 0.9 + audio.mid * a * 0.5;
 
     const pos = [
       Math.cos(angle) * radius,
@@ -84,8 +84,23 @@ export class MathematicalForms extends Effect {
       Math.sin(angle) * radius
     ];
     const forward = normalize([-pos[0], -pos[1] * 0.55, -pos[2]]);
-    const right = normalize(cross(forward, [0, 1, 0]));
-    const up = normalize(cross(right, forward));
+    const right0 = normalize(cross(forward, [0, 1, 0]));
+    const up0 = normalize(cross(right0, forward));
+
+    // Roll reactivo: los medios y el beat inclinan la cámara.
+    const roll = audio.mid * a * 0.42 + audio.beat * a * 0.3;
+    const cr = Math.cos(roll);
+    const sr = Math.sin(roll);
+    const right = [
+      right0[0] * cr + up0[0] * sr,
+      right0[1] * cr + up0[1] * sr,
+      right0[2] * cr + up0[2] * sr
+    ];
+    const up = [
+      up0[0] * cr - right0[0] * sr,
+      up0[1] * cr - right0[1] * sr,
+      up0[2] * cr - right0[2] * sr
+    ];
     this.camera = { pos, right, up, forward };
   }
 

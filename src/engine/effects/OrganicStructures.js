@@ -17,18 +17,18 @@ import { perspective, lookAt, multiply, rotationY } from '../math/mat4.js';
 
 
 export const ORGANIC_SCHEMA = {
-  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad' },
-  amplitude: { type: 'number', default: 0.26, min: 0.0, max: 0.9, label: 'Deformación' },
-  frequency: { type: 'number', default: 1.35, min: 0.3, max: 4.0, label: 'Frecuencia' },
-  twist: { type: 'number', default: 0.0, min: 0.0, max: 1.0, label: 'Torsión' },
-  hue: { type: 'number', default: 0.53, min: 0.0, max: 1.0, label: 'Tono' },
-  saturation: { type: 'number', default: 0.95, min: 0.0, max: 1.0, label: 'Saturación' },
-  glow: { type: 'number', default: 0.95, min: 0.2, max: 4.0, label: 'Glow' },
-  opacity: { type: 'number', default: 0.85, min: 0.05, max: 1.0, label: 'Opacidad' },
-  bloom: { type: 'number', default: 0.85, min: 0.0, max: 3.0, label: 'Bloom' },
-  exposure: { type: 'number', default: 0.95, min: 0.2, max: 3.0, label: 'Exposición' },
-  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio' },
-  seed: { type: 'int', default: 3, min: 0, max: 2147483647, label: 'Seed' }
+  speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad', group: 'Movimiento' },
+  amplitude: { type: 'number', default: 0.26, min: 0.0, max: 0.9, label: 'Deformación', group: 'Forma' },
+  frequency: { type: 'number', default: 1.35, min: 0.3, max: 4.0, label: 'Frecuencia', group: 'Forma' },
+  twist: { type: 'number', default: 0.0, min: 0.0, max: 1.0, label: 'Torsión', group: 'Forma' },
+  hue: { type: 'number', default: 0.53, min: 0.0, max: 1.0, label: 'Tono', group: 'Apariencia' },
+  saturation: { type: 'number', default: 0.95, min: 0.0, max: 1.0, label: 'Saturación', group: 'Apariencia' },
+  glow: { type: 'number', default: 0.95, min: 0.2, max: 4.0, label: 'Glow', group: 'Apariencia' },
+  opacity: { type: 'number', default: 0.85, min: 0.05, max: 1.0, label: 'Opacidad', group: 'Apariencia' },
+  bloom: { type: 'number', default: 0.85, min: 0.0, max: 3.0, label: 'Bloom', group: 'Apariencia' },
+  exposure: { type: 'number', default: 0.95, min: 0.2, max: 3.0, label: 'Exposición', group: 'Apariencia' },
+  audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio', group: 'Comportamiento' },
+  seed: { type: 'int', default: 3, min: 0, max: 2147483647, label: 'Seed', group: 'Comportamiento' }
 };
 
 const FALLBACK_AUDIO = Object.freeze({
@@ -60,6 +60,7 @@ export class OrganicStructures extends Effect {
     this.viewProj = new Float32Array(16);
     this.eye = [0, 1.5, 7];
     this.lastAudio = FALLBACK_AUDIO;
+    this.audioPhase = 0;
     this._buildMesh();
   }
 
@@ -98,8 +99,11 @@ export class OrganicStructures extends Effect {
     const t = this.time;
 
     const pointer = this.renderer.pointer || { x: 0, y: 0 };
-    const radius = 7.1 + Math.sin(t * 0.085) * 0.45;
-    const angle = t * 0.09 * p.speed + pointer.x * 0.2;
+    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const bass = audio.bass * a;
+    const beat = audio.beat * a;
+    const radius = 7.1 + Math.sin(t * 0.085) * 0.45 - bass * 1.3 - beat * 0.55 - audio.rms * a * 0.35;
+    const angle = t * 0.09 * p.speed * (1 + bass * 1.1) + this.audioPhase + pointer.x * 0.2;
     this.eye = [
       Math.sin(angle) * radius,
       1.35 + Math.sin(t * 0.07) * 1.1 - pointer.y * 0.8,
@@ -110,7 +114,8 @@ export class OrganicStructures extends Effect {
     const proj = perspective((52 * Math.PI) / 180, this.renderer.width / Math.max(1, this.renderer.height), 0.1, 60);
     multiply(proj, view, this.viewProj);
 
-    const spin = t * 0.055 * p.speed + (p.seed | 0) * 0.01;
+    this.audioPhase = (this.audioPhase || 0) + dt * (audio.mid * a * 0.25 + beat * 0.7);
+    const spin = t * 0.055 * p.speed * (1 + bass * 0.6) + this.audioPhase + (p.seed | 0) * 0.01;
     rotationY(spin, this.model);
   }
 
@@ -146,7 +151,8 @@ export class OrganicStructures extends Effect {
       .set('uAudioHigh', audio.high * a)
       .set('uAudioRms', audio.rms * a)
       .set('uBeat', audio.beat * a)
-      .set('uAudioAmount', a);
+      .set('uAudioAmount', a)
+      .set('uScale', 1 + audio.bass * a * 0.14 + audio.beat * a * 0.08 + audio.rms * a * 0.05);
 
     this.mesh.draw();
 

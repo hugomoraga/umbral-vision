@@ -25,7 +25,10 @@ uniform float uFrequency;
 uniform float uSeed;
 uniform float uAudioBass;
 uniform float uAudioMid;
+uniform float uAudioHigh;
 uniform float uAudioAmount;
+uniform float uBeat;
+uniform float uScale;
 
 out vec3 vWorld;
 out vec3 vNormal;
@@ -41,11 +44,21 @@ void main() {
   vec3 p = aPosition;
   float n = fbm3(p * uFrequency + vec3(0.0, uTime * 0.18, uSeed), 3);
   float n2 = snoise(p * 3.1 - vec3(uTime * 0.24, 0.0, uSeed * 0.5));
-  float disp = n * uAmplitude + n2 * uAmplitude * 0.38 + bass * (0.28 + mid * 0.2);
+  float wave = sin(aUv.x * 24.0 - uTime * 3.2 + uSeed) * bass * 0.22;
+  float disp = n * uAmplitude + n2 * uAmplitude * 0.38
+             + bass * (0.95 + mid * 0.55)
+             + uBeat * uAudioAmount * 0.7
+             + wave;
 
   p += aNormal * disp;
 
-  vec4 world = uModel * vec4(p, 1.0);
+  // Medios: ondulación lateral (la estructura "nada").
+  vec3 lateral = normalize(cross(aNormal, normalize(vec3(0.0, 1.0, 0.0))) + vec3(0.0001));
+  p += lateral * sin(aUv.x * 18.0 + uTime * 2.3 + uSeed) * mid * 0.35;
+  // Agudos: shimmer fino sobre la superficie.
+  p += aNormal * sin(aUv.x * 90.0 + aUv.y * 40.0 - uTime * 5.0) * (uAudioHigh * uAudioAmount) * 0.08;
+
+  vec4 world = uModel * vec4(p * uScale, 1.0);
   vWorld = world.xyz;
   vNormal = normalize(mat3(uModel) * aNormal);
   vUv = aUv;
@@ -96,7 +109,8 @@ void main() {
   color = mix(color, vec3(0.78, 0.89, 1.0), fresnel * 0.22 + uAudioHigh * uAudioAmount * 0.10);
 
   float bright = 0.12 + diffuse * 0.62 + backLight * 0.30 + fresnel * 1.25
-               + bands * 0.62 + uBeat * uAudioAmount * 0.45 + uAudioRms * uAudioAmount * 0.25;
+               + bands * 0.62 + uBeat * uAudioAmount * 0.9 + uAudioRms * uAudioAmount * 0.8
+               + uAudioHigh * uAudioAmount * 0.5;
   color *= bright * uGlow;
 
   float alpha = uOpacity * (0.08 + fresnel * 0.46 + bands * 0.30);

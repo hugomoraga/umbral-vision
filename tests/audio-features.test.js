@@ -88,8 +88,8 @@ describe('audio features (motor GPU)', () => {
 
     expect(features.enabled).toBe(true);
     expect(features.bass).toBeGreaterThan(0.8);
-    expect(features.mid).toBeGreaterThan(0.5);
-    expect(features.high).toBeGreaterThan(0.2);
+    expect(features.mid).toBeGreaterThan(features.high);
+    expect(features.high).toBeGreaterThan(0.05);
     expect(features.rms).toBeGreaterThan(0);
     // La energía constante no debe disparar beats infinitos.
     expect(features.beat).toBeGreaterThanOrEqual(0);
@@ -102,5 +102,28 @@ describe('audio features (motor GPU)', () => {
     if (originalAudioContext === undefined) delete globalThis.AudioContext;
     else globalThis.AudioContext = originalAudioContext;
     Object.defineProperty(globalThis, 'navigator', { value: originalNavigator, configurable: true });
+  });
+});
+
+describe('dinámica de bandas', () => {
+  it('distingue graves, medios y agudos sin aplanar las bandas', () => {
+    const bass = computeBands(fillSpectrum({ bass: 255, mid: 20, high: 10 }), 48000, 1024);
+    const mid = computeBands(fillSpectrum({ bass: 10, mid: 255, high: 10 }), 48000, 1024);
+    const high = computeBands(fillSpectrum({ bass: 10, mid: 20, high: 255 }), 48000, 1024);
+
+    expect(bass.bass).toBeGreaterThan(bass.mid);
+    expect(bass.bass).toBeGreaterThan(bass.high);
+    expect(mid.mid).toBeGreaterThan(mid.bass);
+    expect(mid.mid).toBeGreaterThan(mid.high);
+    expect(high.high).toBeGreaterThan(high.bass);
+    expect(high.high).toBeGreaterThan(high.mid);
+  });
+
+  it('expone flujo espectral y beat en las features', () => {
+    const f = getAudioFeatures();
+    expect('flux' in f).toBe(true);
+    expect(typeof f.flux).toBe('number');
+    expect(f.beat).toBeGreaterThanOrEqual(0);
+    expect(f.beat).toBeLessThanOrEqual(1);
   });
 });

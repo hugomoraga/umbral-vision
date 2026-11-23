@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-23
+
+### Added
+- **Studio UI**: rediseño completo del generador (top bar, panel por tabs, dock de
+  efectos, transporte, presets, info, modo inmersivo y responsive móvil).
+- **Espectro de audio en vivo** con 42 barras logarítmicas coloreadas por banda y
+  medidores B/M/A.
+- **Auto-hide de interfaz** tras 4.2 s de inactividad; `H` alterna inmersivo.
+- Pausa/reanudación del backend (`setVisualizerPaused`) y atajo `P`.
+- Parámetros agrupados (Forma / Movimiento / Apariencia / Comportamiento).
+
+### Changed
+- **Análisis de audio reescrito**: FFT 2048, ganancia global (conserva la relación
+  entre bandas), volumen RMS absoluto, spectral flux + beat, smoothing por `dt`.
+- Mapeos por banda más fuertes y distintos en las cuatro familias GPU: graves →
+  zoom/onda, medios → ondulación/roll, agudos → shimmer/detalle, RMS/beat → glow.
+- El post-proceso modula exposición y bloom con RMS/beat.
+- `tickAudio(dt)` recibe el delta del loop; `level` ahora mezcla RMS y bandas.
+
+### Fixed
+- La normalización por banda aplanaba graves/medios/agudos y hacía que la reacción
+  pareciera estática.
+- `H` se revelaba y ocultaba en el mismo evento por competencia de handlers.
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

@@ -74,7 +74,7 @@ void main() {
   vec3 flowPos = (pos + warp) * (0.55 + uComplexity * 0.75);
 
   vec3 flow = organicFlow(flowPos + vec3(0.0, t * 0.05, 0.0), t, uComplexity);
-  flow *= uAmplitude * (0.85 + uTurbulence * 0.9);
+  flow *= uAmplitude * (0.85 + uTurbulence * 0.9) * (1.0 + mid * 1.4);
   flow += curlNoise(pos * 4.2 + t * 0.21) * high * 0.35;
 
   vec3 delta = home - pos;
@@ -83,14 +83,14 @@ void main() {
 
   vec3 accel = flow * 3.2 + delta * spring;
   // Beat: impulso radial que atraviesa la membrana.
-  accel += normalize(pos + vec3(0.0001)) * beat * 2.2;
+  accel += normalize(pos + vec3(0.0001)) * beat * 4.2;
 
   vel = vel * 0.94 + accel * uDt;
 
   float vlen = length(vel);
   if (vlen > 6.0) vel *= 6.0 / vlen;
 
-  float speedMul = uSpeed * (1.0 + bass * 0.85);
+  float speedMul = uSpeed * (1.0 + bass * 1.9);
   pos += vel * uDt * speedMul;
 
   life += uDt * (0.05 + seed * 0.025 + high * 0.03);
@@ -197,7 +197,7 @@ void main() {
   float speed = length(vel);
 
   float sizePx = uPointSize * (5.0 / depth) * (0.60 + param * 0.75);
-  sizePx *= (0.75 + 0.55 * tissue) * (1.0 + high * 0.6 + rms * 0.3);
+  sizePx *= (0.75 + 0.55 * tissue) * (1.0 + high * 1.1 + rms * 0.5);
   sizePx = max(sizePx, 0.9);
 
   float stretch = 1.0 + uStretch * (0.12 + 0.30 * tissue) + min(motionLen, 0.30) * uStretch * 12.0;

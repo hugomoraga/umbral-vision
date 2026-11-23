@@ -27,6 +27,7 @@ let engine = null;
 let engineContainer = null;
 let p5CanvasEl = null;
 let config = { isLite: false };
+let paused = false;
 
 const profile = detectProfile();
 
@@ -79,6 +80,7 @@ function startEngineEffect(effectName, container = null, options = {}) {
   }
   currentEffect = null;
   currentEffectName = effectName;
+  if (paused && engine) engine.stop();
 }
 
 function startP5Effect(effectName, container = null) {
@@ -133,6 +135,7 @@ function startP5Effect(effectName, container = null) {
         }
       });
       renderLoop.start();
+      if (paused) renderLoop.stop();
 
       // p5 sigue dibujando via sketch.draw, pero el work real está en renderLoop.
       sketch.draw = function () { /* renderLoop handles it */ };
@@ -178,7 +181,8 @@ export function changeEffect(effectName) {
   const sk = p5Sketch || p5Instance;
   currentEffectName = effectName;
   currentEffect = Effects[effectName](sk);
-  if (renderLoop && !renderLoop.isRunning()) renderLoop.start();
+  if (renderLoop && !renderLoop.isRunning() && !paused) renderLoop.start();
+  if (paused && engine) engine.stop();
 }
 
 export function getCurrentEffect() {
@@ -187,6 +191,24 @@ export function getCurrentEffect() {
 
 export function getAvailableEffects() {
   return [...Object.keys(Effects), ...getEngineEffectNames()];
+}
+
+/** Pausa/reanuda el backend activo (p5 o GPU) sin destruirlo. */
+export function setVisualizerPaused(value) {
+  paused = !!value;
+  if (paused) {
+    if (engine) engine.stop();
+    if (renderLoop) renderLoop.stop();
+  } else if (isEngineEffect(currentEffectName) && engine) {
+    engine.show();
+  } else if (renderLoop) {
+    renderLoop.start();
+  }
+  return paused;
+}
+
+export function isVisualizerPaused() {
+  return paused;
 }
 
 export function stopVisualizer() {

@@ -6,8 +6,9 @@
  *   ← / →        → previous / next effect (wrap)
  *   Space        → toggle auto-transition
  *   F            → toggle fullscreen
- *   H            → toggle panel
+ *   H            → toggle interface (immersive)
  *   M            → toggle microphone
+ *   P            → play / pause
  *   ?            → toggle onboarding
  *
  * Se ignoran cuando el foco está en <input>, <textarea>, o [contenteditable].
@@ -24,6 +25,8 @@ export function initKeyboard(handlers) {
     'H': () => handlers.togglePanel?.(),
     'm': () => handlers.toggleMic?.(),
     'M': () => handlers.toggleMic?.(),
+    'p': () => handlers.togglePause?.(),
+    'P': () => handlers.togglePause?.(),
     '?': () => handlers.toggleOnboarding?.(),
     'ArrowLeft': () => handlers.prevEffect?.(),
     'ArrowRight': () => handlers.nextEffect?.()

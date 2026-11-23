@@ -53,7 +53,7 @@ float mandelbulb(vec3 p) {
   vec3 z = p;
   float dr = 1.0;
   float r = 0.0;
-  float power = uPower + uAudioBass * uAudioAmount * 1.2;
+  float power = uPower + uAudioBass * uAudioAmount * 1.8;
 
   for (int i = 0; i < 8; i++) {
     if (i >= uIterations) break;
@@ -84,7 +84,7 @@ float map(vec3 p) {
   // Simetría rotacional + domain warp temporal.
   q.xz = rot2(uTime * 0.05 * uSpeed + uSeed) * q.xz;
   q.xy = rot2(sin(uTime * 0.07) * 0.18) * q.xy;
-  q += uWarp * 0.10 * vec3(
+  q += (uWarp + uAudioMid * uAudioAmount * 0.9 + uAudioHigh * uAudioAmount * 0.45) * 0.10 * vec3(
     sin(q.y * 2.1 + uTime * 0.31),
     sin(q.z * 2.3 - uTime * 0.27),
     sin(q.x * 2.5 + uTime * 0.23)
@@ -157,7 +157,7 @@ void main() {
     color = base * (0.055 + diffuse * diffuse * 1.25 + rim * 1.7 + pulse * 0.12) * ao;
     color += vec3(0.72, 0.86, 1.0) * spec * 0.55;
     color += glow * 1.25;
-    color *= 1.0 + uBeat * uAudioAmount * 0.8;
+    color *= 1.0 + uBeat * uAudioAmount * 1.1 + uAudioRms * uAudioAmount * 0.4;
   } else {
     // Fondo: casi negro, con el aura volumétrica del fractal.
     color = vec3(0.0015, 0.003, 0.008) + glow * 1.05;

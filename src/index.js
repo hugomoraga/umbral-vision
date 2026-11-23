@@ -21,7 +21,9 @@ import {
   getEffectSchema,
   getEngineStats,
   setEngineQuality,
-  getEngine
+  getEngine,
+  setVisualizerPaused,
+  isVisualizerPaused
 } from './Visualizer.js';
 import {
   initAudio,
@@ -73,7 +75,9 @@ export {
   getEffectSchema,
   getEngineStats,
   setEngineQuality,
-  getEngine
+  getEngine,
+  setVisualizerPaused,
+  isVisualizerPaused
 };
 export {
   initAudio,
@@ -128,7 +132,9 @@ export default {
     getEffectSchema,
     getEngineStats,
     setEngineQuality,
-    getEngine
+    getEngine,
+    setVisualizerPaused,
+    isVisualizerPaused
   },
   Audio: {
     init: initAudio,
