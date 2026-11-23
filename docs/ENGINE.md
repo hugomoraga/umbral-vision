@@ -1,7 +1,8 @@
 # Umbral Vision — Generative Visual Engine (v0.4)
 
-Estado: **Slices 1–5 implementados + integración con la app existente**.
-Primer efecto GPU: **Fluid Fields**. Los 15 efectos p5 siguen funcionando sin cambios.
+Estado: **Slices 1–6 implementados + integración con la app existente**.
+Cuatro familias GPU: **Fluid Fields**, **Organic Structures**, **Mathematical Forms** y
+**Temporal Systems**. Los 15 efectos p5 siguen funcionando sin cambios.
 
 ![Fluid Fields](media/fluid-fields.png)
 
@@ -35,13 +36,22 @@ src/engine/
   shaders/
     common.js              simplex 3D, curl noise, paletas, ACES
     fluid.js               update (sim) + vertex/fragment de partículas
-    post.js                bright/blur/copy/composite
+    post.js                bright/blur/copy/composite/mix (cross-fade)
   effects/
     Effect.js              contrato + schema de parámetros
     FluidFields.js         membrana de partículas GPU
+    OrganicStructures.js   mesh orgánico con displacement
+    MathematicalForms.js   Mandelbulb raymarched
+    TemporalVeil.js        feedback de framebuffer
+  shaders/
+    organic.js             vertex displacement + Fresnel/venas
+    mathematical.js        SDF + ray marching
+    temporal.js            acumulación / estelas
   math/
     mat4.js                perspective/lookAt/multiply
+    organicGeometry.js     torus knot procedural (testeable)
     random.js              mulberry32 + hash determinista
+  core/Mesh.js             VAO/VBO indexado
 ```
 
 ### Contrato de efecto
@@ -120,7 +130,60 @@ El mismo efecto con `hue: 0.035`, `seed: 47`:
 
 ![Fluid Fields ámbar](media/fluid-fields-amber.png)
 
-## 4. Audio → visual
+## 4. Las cuatro familias
+
+| Efecto | Familia | Técnica matemática / gráfica |
+|---|---|---|
+| `fluidFields` | Fluid Fields | partículas GPU, curl noise, domain warping, spring-to-surface |
+| `organicStructures` | Organic Structures | superficie paramétrica (torus knot), displacement, Fresnel |
+| `mathematicalForms` | Mathematical Forms | Mandelbulb raymarched, SDF, gradiente, oclusión |
+| `temporalVeil` | Temporal Systems | ping-pong de framebuffer, acumulación, estelas |
+
+### Organic Structures
+
+Mesh generado en CPU (`src/engine/math/organicGeometry.js`): trefoil knot con tubo
+orgánico, torsión y pliegues deterministas por seed. El vertex shader desplaza cada
+vértice por la normal con fbm 3D + audio; el fragment shader compone venas, Fresnel,
+diffuse/backlight y capas translúcidas aditivas. No usa partículas ni ray marching.
+
+![Organic Structures](media/organic-structures.png)
+
+### Mathematical Forms
+
+Mandelbulb en un fragment shader: SDF iterativo, ray marching con presupuesto de
+pasos según perfil/detalle, normales por gradiente tetraédrico, oclusión aproximada
+por número de pasos de marcha y acumulación de aura volumétrica. La potencia del
+fractal y el warp responden al audio.
+
+![Mathematical Forms](media/mathematical-forms.png)
+
+### Temporal Systems
+
+Dos render targets HDR en ping-pong. Cada frame muestrea el anterior con zoom,
+rotación, aberración y distorsión por ruido, lo atenúa (`decay`) y le suma emisores
+de filamentos radiales. El resultado expone el target recién escrito como escena
+para el post-proceso compartido.
+
+![Temporal Veil](media/temporal-veil.png)
+
+## 5. Transiciones (cross-fade GPU)
+
+`PostPipeline` incluye un pase `mix` que combina dos scene targets antes del bright
+pass/bloom. El engine mantiene el efecto saliente vivo durante la transición,
+actualiza y renderiza ambos, y aplica smoothstep al `uMix`.
+
+```js
+engine.setEffect('organicStructures', undefined, { transitionMs: 1000 });
+```
+
+- Cambio entre efectos GPU: 1 s por defecto.
+- GPU → p5 y p5 → GPU: instantáneo (no comparten pipeline).
+- La UI/auto-transición lo usan automáticamente.
+- `transitioning` y progreso visibles en `getEngineStats()`.
+
+![Cross-fade Fluid → Organic](media/crossfade.png)
+
+## 6. Audio → visual
 
 `AudioReactive` ahora calcula por frame un objeto reutilizado (`getAudioFeatures()`):
 
@@ -139,7 +202,7 @@ real de bandas. Si no hay audio, todas las features se resetean a cero.
 **El audio no cambia solo color**: modifica la simulación (velocidad/amplitud/vida) y
 la respuesta de render (tamaño/brillo). Verificable con `examples/fluid.html` → 🎤 Audio.
 
-## 5. Rendimiento y calidad
+## 7. Rendimiento y calidad
 
 | Perfil | Partículas | DPR máx | render scale | Bloom mips | Blur taps |
 |---|---:|---:|---:|---:|---:|
@@ -163,24 +226,35 @@ la respuesta de render (tamaño/brillo). Verificable con `examples/fluid.html` �
 
 ![Bench](media/bench-headless.png)
 
+| Efecto (perfil high) | Resolución | ms/frame (software) |
+|---|---:|---:|
+| Fluid Fields | 1152×648 | 3.03 ms |
+| Organic Structures | 1152×648 | 1.47 ms |
+| Mathematical Forms | 1152×648 | 8.57 ms |
+| Temporal Veil | 1152×648 | 3.25 ms |
+
+Perfiles de Fluid Fields:
+
 | Perfil | Resolución | Partículas | ms/frame (software) |
 |---|---|---:|---:|
 | Lite | 896×504 | 16 384 | 1.00 ms |
 | High | 1152×648 | 65 536 | 3.06 ms |
 | Ultra | 1280×720 | 262 144 | 10.43 ms |
 
-Medido con 90 frames de `update + render + post` y `gl.finish()` en Firefox headless
+Medido con 60–90 frames de `update + render + post` y `gl.finish()` en Firefox headless
 sobre rasterizador **software** (clase Radeon HD 3200). En GPU real el costo es menor;
 estos números son una cota superior, no un benchmark de producción. Reproducible con
 `examples/bench.html`.
 
-## 6. Integración con la aplicación existente
+![Benchmark de las cuatro familias](media/bench-all.png)
+
+## 8. Integración con la aplicación existente
 
 | Funcionalidad | Estado |
 |---|---|
 | Selector / thumbnails | ✅ `getAvailableEffects()` une p5 + GPU; thumbnail 2D propia |
 | Presets | ✅ guardan `params` del motor (compatibles con presets viejos) |
-| Auto-transición | ✅ incluye `fluidFields` en la rotación |
+| Auto-transición | ✅ incluye las 4 familias GPU con cross-fade |
 | Audio reactivo | ✅ comparte `AudioReactive`; el motor hace `tickAudio()` en su loop |
 | Fullscreen | ✅ sin cambios |
 | Captura PNG | ✅ `captureFrame` elige el canvas visible (`preserveDrawingBuffer: true`) |
@@ -189,7 +263,8 @@ estos números son una cota superior, no un benchmark de producción. Reproducib
 | Efectos p5 | ✅ intactos, mismo registro y factories |
 
 El motor es independiente de la UI: `createEngine({ container, quality })` puede usarse
-sin montar el generador.
+sin montar el generador. Los efectos GPU comparten contrato, post-proceso, perfiles y
+transiciones.
 
 ```js
 import { createEngine } from '@kndl/umbral-vision';
@@ -204,7 +279,7 @@ engine.getStats();
 engine.dispose();
 ```
 
-## 7. Cómo ejecutar
+## 9. Cómo ejecutar
 
 ```bash
 npm install
@@ -218,32 +293,28 @@ npx serve .         # o python3 -m http.server
 # → http://localhost:8000/examples/bench.html
 ```
 
-## 8. Limitaciones conocidas
+## 10. Limitaciones conocidas
 
-1. **Sin blending entre efectos todavía**. El cambio es instantáneo (p5 y GPU); el
-   slice 6 debe añadir cross-fade / interpolación de parámetros.
-2. **Solo la familia Fluid Fields**. Organic Structures, Mathematical Forms y
-   Temporal Systems están planificadas; el contrato ya las soporta.
-3. **Simulación float requerida**. Sin `EXT_color_buffer_float`/half-float el efecto
-   no arranca (error controlado). Fallback CPU no implementado.
+1. **Transiciones p5↔GPU instantáneas**: el cross-fade existe solo entre efectos GPU.
+2. **Sin panel genérico de parámetros** en la UI todavía; la API y el schema están
+   listos (`getEffectSchema`) y la demo los consume.
+3. **Simulación float requerida** para Fluid Fields. Sin `EXT_color_buffer_float`/
+   half-float el efecto no arranca (error controlado). Fallback CPU no implementado.
 4. **Adaptativo basado en frame delta**, no en GPU timer query. En pantallas de 30 Hz
    puede bajar resolución de más; no afecta corrección.
 5. **Sin TypeScript/Vite**. Se mantiene esbuild y JS+JSDoc.
 6. **Audio**: el análisis está testeado con FFT mock; la validación con micrófono real
    requiere interacción del usuario (permiso) y no es posible en headless.
-7. **Coste de la simulación Ultra**: 262k partículas × curl noise es exigente en GPUs
-   integradas; por eso Lite/High son los perfiles por defecto y la resolución es adaptativa.
+7. **Coste de Mathematical Forms**: el ray marching depende de la resolución; el
+   perfil Lite reduce pasos. La resolución adaptativa global ayuda.
 8. **Context restore** reconstruye el efecto desde cero (la composición se reinicia).
 
-## 9. Próximos pasos (Slice 6+)
+## 11. Próximos pasos (Slice 7+)
 
-1. **EffectManager + transiciones**: cross-fade entre dos scene targets, easing de
-   parámetros y auto-transición cinematográfica.
-2. **Organic Structures**: superficies paramétricas + displacement en vertex shader,
-   iluminación volumétrica y cámara con profundidad.
-3. **Mathematical Forms**: ray marching de SDFs, fractales y atractores.
-4. **Temporal Systems**: ping-pong de feedback, estelas y acumulación temporal.
-5. **Panel de parámetros genérico** en la UI (schema → controles) sin rediseñar.
-6. **GPU timer queries** para métricas reales y adaptativo por costo de GPU.
-7. **Presets con seed** en la URL compartida (hash corto).
-8. Evaluar **WebGPU** detrás de la misma interfaz.
+1. **Panel de parámetros genérico** en la UI (schema → controles) sin rediseñar.
+2. **Transiciones p5↔GPU**: compositing de un canvas 2D y un target WebGL.
+3. **Más variantes por familia** (atractores, túneles volumétricos, membranas celulares).
+4. **GPU timer queries** para métricas reales y adaptativo por costo de GPU.
+5. **Presets con seed** y parámetros en la URL compartida (hash corto).
+6. **Audio**: validación con micrófono real + calibración de beat por dispositivo.
+7. Evaluar **WebGPU** detrás de la misma interfaz.

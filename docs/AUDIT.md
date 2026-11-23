@@ -2,6 +2,9 @@
 
 Fecha: 2026-11-23
 
+> **Estado actual:** slices 1–6 implementados en v0.5.0 (motor GPU, cuatro familias
+> visuales y cross-fade). Este documento conserva el diagnóstico previo a la migración.
+
 ## 1. Resumen ejecutivo
 
 Umbral Vision es hoy una **librería de efectos 2D sobre p5.js**. No existe un motor de

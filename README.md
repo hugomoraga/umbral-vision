@@ -10,19 +10,30 @@ Framework modular para generación de visuales psicodélicos en tiempo real con 
 
 ## Motor GPU (v0.4)
 
-- Simulación de partículas en GPU con texturas ping-pong (MRT).
-- Curl noise, domain warping, membranas orgánicas y profundidad con cámara.
+Cuatro familias visuales con técnicas distintas:
+
+| Efecto | Familia | Técnica |
+|---|---|---|
+| `fluidFields` | Fluid Fields | partículas GPU, curl noise, domain warping, spring-to-surface |
+| `organicStructures` | Organic Structures | mesh paramétrico, vertex displacement, Fresnel y tejido translúcido |
+| `mathematicalForms` | Mathematical Forms | Mandelbulb raymarched, SDF, normales por gradiente, volumen |
+| `temporalVeil` | Temporal Systems | feedback ping-pong, acumulación temporal, estelas y distorsión |
+
+- Simulación GPU con texturas ping-pong (MRT) y estado determinista por seed.
 - Pipeline HDR: bright pass, bloom multi-mip, tonemap ACES, viñeta, grano y aberración.
+- **Cross-fade** entre efectos GPU antes del bloom.
 - Audio reactivo real: bajos → deformación/velocidad, medios → flujo, agudos → brillo,
   RMS → energía y beat detection con smoothing.
 - Perfiles `lite` / `high` / `ultra` + resolución adaptativa.
 - El motor es independiente de la UI; los 15 efectos p5 siguen intactos.
 
-Efectos GPU disponibles: `fluidFields`.
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/fluid-fields-amber.png" width="49%" alt="Fluid Fields ámbar">
-  <img src="https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/bench-headless.png" width="49%" alt="Benchmark">
+  <img src="https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/organic-structures.png" width="49%" alt="Organic Structures">
+  <img src="https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/mathematical-forms.png" width="49%" alt="Mathematical Forms">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/temporal-veil.png" width="49%" alt="Temporal Veil">
+  <img src="https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/crossfade.png" width="49%" alt="Cross-fade Fluid → Organic">
 </p>
 
 ### Uso
@@ -30,8 +41,9 @@ Efectos GPU disponibles: `fluidFields`.
 ```javascript
 import { startVisualizer, setEffectParameters } from '@kndl/umbral-vision';
 
-startVisualizer('fluidFields');                 // efecto GPU
-setEffectParameters({ speed: 1.3, hue: 0.03 });  // parámetros en runtime
+startVisualizer('fluidFields');                  // efecto GPU
+setEffectParameters({ speed: 1.3, hue: 0.03 });   // parámetros en runtime
+startVisualizer('organicStructures');             // cross-fade automático (1s)
 ```
 
 O sin la UI:
@@ -164,6 +176,11 @@ startAutoTransition(10000, ['tunnel', 'spiral', 'mandala'], (effectName) => {
 Efectos GPU (no usan p5):
 
 - `fluidFields` — Membrana de partículas con curl noise, bloom y audio reactivo
+- `organicStructures` — Torus knot orgánico con displacement y shading translúcido
+- `mathematicalForms` — Mandelbulb raymarched con glow volumétrico
+- `temporalVeil` — Feedback temporal con estelas y distorsión
+
+Transiciones: `changeEffect('organicStructures')` hace cross-fade GPU de ~1 s.
 
 ## Peer Dependencies
 

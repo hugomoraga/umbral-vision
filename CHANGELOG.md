@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-23
+
+### Added
+- **Organic Structures** (`organicStructures`): mesh paramétrico (torus knot) con
+  displacement en vertex shader, venas procedurales, Fresnel y capas translúcidas.
+- **Mathematical Forms** (`mathematicalForms`): Mandelbulb raymarched en GLSL con
+  SDF, normales por gradiente, oclusión aproximada y glow volumétrico.
+- **Temporal Veil** (`temporalVeil`): feedback de framebuffer ping-pong, zoom/rotación
+  y distorsión del frame anterior, acumulación temporal y estelas.
+- **Cross-fade entre efectos GPU**: `setEffect(name, params, { transitionMs })`,
+  mezcla de ambos scene targets antes del bloom; easing smoothstep.
+- `engine.transitioning` y progreso en `getEngineStats()`.
+- Previews 2D para las cuatro familias en thumbnails.
+- Tests de geometría procedural, normales, determinismo y registro (100 tests).
+- Capturas y métricas de las cuatro familias + cross-fade.
+
+### Changed
+- El selector y la auto-transición alternan las cuatro familias GPU.
+- Cambiar entre efectos GPU hace cross-fade de 1 s; p5↔GPU sigue siendo instantáneo
+  y GPU→GPU solo transiciona si el motor estaba visible.
+
 ## [0.4.0] - 2026-11-23
 
 ### Added
