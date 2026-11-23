@@ -309,7 +309,14 @@ npx serve .         # o python3 -m http.server
    perfil Lite reduce pasos. La resolución adaptativa global ayuda.
 8. **Context restore** reconstruye el efecto desde cero (la composición se reinicia).
 
-## 11. Próximos pasos (Slice 7+)
+## 11. Validación en la app real
+
+Ver [VALIDATION.md](VALIDATION.md): 19 efectos en el generador de `kndl000`,
+cuatro familias funcionando, cross-fade, Lite, audio, PNG y presets, sin errores de
+consola. La sincronización encontró y corrigió dos bugs (transición congelada y
+thumbnails negros).
+
+## 12. Próximos pasos (Slice 7+)
 
 1. **Panel de parámetros genérico** en la UI (schema → controles) sin rediseñar.
 2. **Transiciones p5↔GPU**: compositing de un canvas 2D y un target WebGL.
