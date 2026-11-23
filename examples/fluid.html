@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Umbral Vision — Fluid Fields</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #020307;
+      color: #dfe9ff;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    main { position: fixed; inset: 0; overflow: hidden; }
+    #ui {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      width: 270px;
+      padding: 14px 16px 12px;
+      border: 1px solid rgba(120, 180, 255, 0.18);
+      border-radius: 14px;
+      background: rgba(4, 8, 18, 0.72);
+      backdrop-filter: blur(10px);
+      font-size: 12px;
+      z-index: 10;
+      user-select: none;
+    }
+    #ui h1 {
+      margin: 0 0 2px;
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #9fc7ff;
+    }
+    #ui .sub { margin: 0 0 12px; opacity: 0.45; font-size: 11px; }
+    .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+    .row label { flex: 0 0 82px; opacity: 0.72; }
+    .row input[type=range] { flex: 1; min-width: 0; accent-color: #5fb6ff; }
+    .row .val { flex: 0 0 30px; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.55; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    button, select {
+      font: inherit;
+      color: #cfe3ff;
+      background: rgba(90, 150, 255, 0.12);
+      border: 1px solid rgba(120, 180, 255, 0.25);
+      border-radius: 7px;
+      padding: 5px 9px;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(90, 150, 255, 0.22); }
+    button.on { background: rgba(80, 220, 160, 0.22); border-color: rgba(80, 220, 160, 0.45); }
+    #stats {
+      margin-top: 12px;
+      font-size: 10.5px;
+      line-height: 1.55;
+      opacity: 0.5;
+      white-space: pre;
+    }
+    .hint {
+      position: fixed;
+      right: 16px;
+      bottom: 12px;
+      font-size: 11px;
+      opacity: 0.38;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <main id="stage"></main>
+
+  <aside id="ui">
+    <h1>Fluid Fields</h1>
+    <p class="sub">Umbral Vision · WebGL 2 · GPU particles</p>
+    <div id="controls"></div>
+    <div class="buttons">
+      <button id="mic">🎤 Audio</button>
+      <button id="capture">⭳ PNG</button>
+      <button id="seed">↻ Seed</button>
+      <button id="hide">Ocultar</button>
+    </div>
+    <div id="stats">—</div>
+  </aside>
+
+  <div class="hint">H: ocultar/mostrar controles · audio: bajos→deformación, medios→flujo, agudos→brillo</div>
+
+  <script type="module">
+    import {
+      startVisualizer,
+      getEffectSchema,
+      setEffectParameters,
+      getEngineStats,
+      initAudio,
+      stopAudio,
+      getAudioState
+    } from '../src/index.js';
+
+    startVisualizer('fluidFields', document.getElementById('stage'));
+
+    const schema = getEffectSchema();
+    const controls = document.getElementById('controls');
+    const inputs = new Map();
+    const SKIP = new Set(['seed', 'audio']);
+
+    for (const [name, desc] of Object.entries(schema)) {
+      if (SKIP.has(name) || desc.type === 'boolean') continue;
+      const row = document.createElement('div');
+      row.className = 'row';
+      const label = document.createElement('label');
+      label.textContent = desc.label || name;
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = String(desc.min ?? 0);
+      input.max = String(desc.max ?? 1);
+      input.step = desc.type === 'int' ? '1' : '0.01';
+      input.value = String(desc.default);
+      const val = document.createElement('span');
+      val.className = 'val';
+      val.textContent = Number(desc.default).toFixed(2);
+      input.addEventListener('input', () => {
+        const v = Number(input.value);
+        setEffectParameters({ [name]: v });
+        val.textContent = desc.type === 'int' ? String(v) : v.toFixed(2);
+      });
+      row.append(label, input, val);
+      controls.appendChild(row);
+      inputs.set(name, { input, val, desc });
+    }
+
+    // Perfil de calidad
+    const qualityRow = document.createElement('div');
+    qualityRow.className = 'row';
+    const qLabel = document.createElement('label');
+    qLabel.textContent = 'Calidad';
+    const select = document.createElement('select');
+    for (const q of ['lite', 'high', 'ultra']) {
+      const opt = document.createElement('option');
+      opt.value = q;
+      opt.textContent = q;
+      if (q === 'high') opt.selected = true;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => {
+      import('../src/index.js').then(({ setEngineQuality }) => setEngineQuality(select.value));
+    });
+    qualityRow.append(qLabel, select);
+    controls.appendChild(qualityRow);
+
+    const statsEl = document.getElementById('stats');
+    setInterval(() => {
+      const s = getEngineStats();
+      if (!s) return;
+      statsEl.textContent =
+        `${s.fps.toFixed(1)} fps · ${s.frameMs.toFixed(1)} ms\n` +
+        `${s.activeParticles.toLocaleString()} partículas\n` +
+        `${s.width}×${s.height} (${Math.round(s.scale * 100)}%) · ${s.quality}\n` +
+        `cpu ${s.cpuMs.toFixed(1)} ms`;
+    }, 500);
+
+    const micBtn = document.getElementById('mic');
+    micBtn.addEventListener('click', async () => {
+      if (!getAudioState().enabled) {
+        try {
+          await initAudio();
+          micBtn.classList.add('on');
+          micBtn.textContent = '🎤 Audio ON';
+        } catch (e) {
+          micBtn.textContent = '🎤 Error';
+          console.error(e);
+        }
+      } else {
+        await stopAudio();
+        micBtn.classList.remove('on');
+        micBtn.textContent = '🎤 Audio';
+      }
+    });
+
+    document.getElementById('capture').addEventListener('click', () => {
+      const canvas = document.querySelector('#stage canvas');
+      if (!canvas) return;
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `umbral-fluid-${Date.now()}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+    });
+
+    document.getElementById('seed').addEventListener('click', () => {
+      setEffectParameters({ seed: Math.floor(Math.random() * 100000) });
+    });
+
+    const panel = document.getElementById('ui');
+    document.getElementById('hide').addEventListener('click', () => { panel.style.display = 'none'; });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'h' || e.key === 'H') {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+
+    // Acceso de consola para explorar la API.
+    window.UV = { setEffectParameters, getEngineStats, schema };
+  </script>
+</body>
+</html>

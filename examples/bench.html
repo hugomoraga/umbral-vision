@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><body style="margin:0;background:#05070c;color:#bcd;font:13px monospace;white-space:pre">
+<div id="stage" style="position:fixed;left:0;top:0;width:1280px;height:720px;opacity:0.001"></div>
+<div id="out" style="position:relative;z-index:9;padding:16px">bench...</div>
+<script type="module">
+import { createEngine } from '../src/index.js';
+const out = document.getElementById('out');
+const audio = { enabled: false, level: 0, rms: 0, bass: 0, mid: 0, high: 0, beat: 0, energy: 0 };
+const lines = [];
+for (const q of ['lite', 'high', 'ultra']) {
+  const engine = createEngine({ container: document.getElementById('stage'), effectName: 'fluidFields', quality: q, autoStart: false });
+  const gl = engine.gl;
+  for (let i = 0; i < 20; i++) engine.renderFrame(1/60, audio);
+  gl.finish();
+  const t0 = performance.now();
+  for (let i = 0; i < 90; i++) engine.renderFrame(1/60, audio);
+  gl.finish();
+  const ms = (performance.now() - t0) / 90;
+  const s = engine.getStats();
+  lines.push(`${q.padEnd(5)} ${s.particleCount.toString().padStart(8)} part  ${ms.toFixed(2)} ms/frame (${(1000/ms).toFixed(0)} fps)  ${s.width}x${s.height}`);
+  engine.dispose();
+}
+out.textContent = 'Fluid Fields - headless Firefox / software WebGL (Radeon HD 3200 class)\n' +
+  '1280x720 CSS, dt=1/60, 90 frames with gl.finish()\n\n' + lines.join('\n');
+</script></body></html>
