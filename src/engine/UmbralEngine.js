@@ -59,6 +59,7 @@ export function createEngine(options = {}) {
   let disposed = false;
   let lastStatsAt = 0;
   const postOverrides = {};
+  const savedParams = {};
 
   function createPost() {
     if (post) {
@@ -202,10 +203,16 @@ export function createEngine(options = {}) {
       return effect;
     }
 
+    if (currentName && effect) savedParams[currentName] = effect.getParameters();
+
     const transitionMs = Math.max(0, options.transitionMs ?? 0);
     const previous = effect;
     const previousName = currentName;
-    const next = createEffect(name, { ...params, ...(nextParams || {}) });
+    const next = createEffect(name, {
+      ...params,
+      ...(savedParams[name] || {}),
+      ...(nextParams || {})
+    });
 
     if (previous && transitionMs > 0) {
       if (outgoing) outgoing.dispose();

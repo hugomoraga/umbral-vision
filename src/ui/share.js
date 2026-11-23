@@ -32,11 +32,14 @@ export function downloadFrame() {
   });
 }
 
-export function buildShareURL({ effect, interval, audio } = {}) {
+export function buildShareURL({ effect, interval, audio, params: effectParams } = {}) {
   const params = new URLSearchParams();
   if (effect) params.set('effect', String(effect));
   if (interval != null) params.set('interval', String(interval));
   params.set('audio', audio ? '1' : '0');
+  if (effectParams && typeof effectParams === 'object' && Object.keys(effectParams).length > 0) {
+    params.set('p', JSON.stringify(effectParams));
+  }
   const url = new URL(window.location.href);
   url.search = params.toString();
   url.hash = '';
@@ -56,10 +59,18 @@ export async function copyShareURL(state) {
 
 export function parseShareURL(searchString) {
   const params = new URLSearchParams(searchString);
+  let effectParams = null;
+  if (params.has('p')) {
+    try {
+      const parsed = JSON.parse(params.get('p'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) effectParams = parsed;
+    } catch { /* URL inválida: ignorar parámetros */ }
+  }
   return {
     effect: params.get('effect') || null,
     interval: params.has('interval') ? Number(params.get('interval')) || null : null,
-    audio: params.get('audio') === '1'
+    audio: params.get('audio') === '1',
+    params: effectParams
   };
 }
 

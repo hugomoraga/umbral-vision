@@ -4,6 +4,7 @@ import { ENGINE_EFFECTS } from '../src/engine/registry.js';
 import { createThumbnails } from '../src/ui/thumbnails.js';
 import { getPresets, savePreset, loadPreset, deletePreset } from '../src/ui/presets.js';
 import { captureFrame, buildShareURL, parseShareURL } from '../src/ui/share.js';
+import { createEffectParams } from '../src/ui/effectParams.js';
 
 describe('API pública v0.4', () => {
   it('expone el motor y las funciones de parámetros', () => {
@@ -79,12 +80,39 @@ describe('share + capture con dos canvases', () => {
     root.remove();
   });
 
+  it('buildShareURL codifica parámetros del efecto GPU', () => {
+    const params = { speed: 1.4, hue: 0.2, seed: 42 };
+    const url = buildShareURL({ effect: 'fluidFields', interval: 8, audio: false, params });
+    const parsed = parseShareURL(new URL(url).search);
+    expect(parsed.params).toEqual(params);
+  });
+
+  it('parseShareURL ignora parámetros corruptos', () => {
+    expect(parseShareURL('?effect=fluidFields&p=no-json').params).toBeNull();
+    expect(parseShareURL('?p=[1,2]').params).toBeNull();
+  });
+
   it('buildShareURL conserva effect/interval/audio', () => {
     const url = buildShareURL({ effect: 'fluidFields', interval: 8, audio: true });
     expect(url).toContain('effect=fluidFields');
     expect(url).toContain('interval=8');
     expect(url).toContain('audio=1');
-    expect(parseShareURL(new URL(url).search)).toEqual({ effect: 'fluidFields', interval: 8, audio: true });
+    expect(parseShareURL(new URL(url).search)).toEqual({ effect: 'fluidFields', interval: 8, audio: true, params: null });
+  });
+});
+
+describe('panel de parámetros', () => {
+  it('se oculta para efectos p5 y al destruirse', () => {
+    const root = document.createElement('section');
+    document.body.appendChild(root);
+    const panel = createEffectParams(root);
+    panel.refresh('tunnel');
+    expect(root.hidden).toBe(true);
+    panel.refresh('fluidFields');
+    expect(root.hidden).toBe(false);
+    panel.destroy();
+    expect(root.hidden).toBe(true);
+    root.remove();
   });
 });
 

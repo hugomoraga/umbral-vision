@@ -181,6 +181,8 @@ Efectos GPU (no usan p5):
 - `temporalVeil` — Feedback temporal con estelas y distorsión
 
 Transiciones: `changeEffect('organicStructures')` hace cross-fade GPU de ~1 s.
+La UI del generador muestra un panel de parámetros generado desde el schema del efecto
+activo; los valores se conservan por efecto y se pueden compartir por URL (`p=`).
 
 ## Peer Dependencies
 

@@ -6,7 +6,7 @@
  */
 
 import { Effects } from '../Effects.js';
-import { ENGINE_EFFECTS } from '../engine/registry.js';
+import { ENGINE_EFFECTS, isEngineEffect } from '../engine/registry.js';
 import {
   startVisualizer,
   changeEffect,
@@ -31,6 +31,7 @@ import {
   loadPreset
 } from './presets.js';
 import { initOnboarding } from './onboarding.js';
+import { createEffectParams } from './effectParams.js';
 import { downloadFrame, copyShareURL, parseShareURL } from './share.js';
 import { showToast, initToastListener } from './toast.js';
 import { createFpsWidget } from '../perf/fpsCounterUI.js';
@@ -89,7 +90,28 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
     ? createThumbnails(thumbnailsEl, ALL_EFFECTS, (name) => selectEffect(name))
     : null;
 
+  // Panel genérico de parámetros del motor GPU, con las clases del panel actual.
+  let effectParams = null;
+  if (panel) {
+    const sections = panel.querySelector('.panel-body');
+    const effectsSection = thumbnailsEl ? thumbnailsEl.closest('section') : null;
+    const paramsSection = document.createElement('section');
+    paramsSection.id = 'effect-params';
+    const label = document.createElement('span');
+    label.className = 'panel-section-label';
+    label.textContent = 'Parámetros';
+    paramsSection.appendChild(label);
+    if (effectsSection) effectsSection.after(paramsSection);
+    else if (sections) sections.appendChild(paramsSection);
+    effectParams = createEffectParams(paramsSection);
+  }
+
+  if (shareParams.params && isEngineEffect(state.currentEffect)) {
+    setEffectParameters(shareParams.params);
+  }
+
   if (thumbs) thumbs.highlight(state.currentEffect);
+  if (effectParams) effectParams.refresh(state.currentEffect);
 
   function selectEffect(name) {
     if (!ALL_EFFECTS[name]) {
@@ -99,6 +121,7 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
     changeEffect(name);
     state.currentEffect = name;
     if (thumbs) thumbs.highlight(name);
+    if (effectParams) effectParams.refresh(name);
     if (autoCheck?.checked) {
       startAutoTransition(state.intervalSeconds * 1000, Object.keys(ALL_EFFECTS), selectEffect);
     }
@@ -233,8 +256,9 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
       if (intervalInput) intervalInput.value = String(state.intervalSeconds);
       if (intervalValue) intervalValue.textContent = `${state.intervalSeconds}s`;
       if (p.state.effect && ALL_EFFECTS[p.state.effect]) selectEffect(p.state.effect);
-      if (p.state.params && typeof p.state.params === 'object') {
+      if (p.state.params && typeof p.state.params === 'object' && isEngineEffect(state.currentEffect)) {
         setEffectParameters(p.state.params);
+        if (effectParams) effectParams.refresh(state.currentEffect);
       }
       showToast(`Preset "${p.name}" cargado`);
     });
@@ -247,7 +271,7 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
         effect: state.currentEffect,
         interval: state.intervalSeconds,
         audioEnabled: getAudioState().enabled,
-        params: getEffectParameters()
+        params: isEngineEffect(state.currentEffect) ? getEffectParameters() : null
       });
       if (created) {
         populatePresetSelect(presetSelect);
@@ -270,7 +294,8 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
       const res = await copyShareURL({
         effect: state.currentEffect,
         interval: state.intervalSeconds,
-        audio: audio.enabled
+        audio: audio.enabled,
+        params: isEngineEffect(state.currentEffect) ? getEffectParameters() : null
       });
       if (res.method === 'clipboard') {
         showToast('URL copiada al clipboard');

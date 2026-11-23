@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-23
+
+### Added
+- **Panel genérico de parámetros** en la UI del generador: se construye desde el
+  schema del efecto GPU activo, usa las clases existentes del panel y permite
+  editar todos los parámetros en vivo + reiniciar defaults + nueva seed.
+- Los parámetros se **conservan por efecto** al cambiar y volver.
+- **Parámetros compartibles por URL**: `?effect=fluidFields&p={...}`; se restauran
+  al cargar. JSON inválido se ignora.
+- Presets de efectos p5 ya no guardan parámetros GPU obsoletos.
+
 ## [0.5.2] - 2026-11-23
 
 ### Fixed

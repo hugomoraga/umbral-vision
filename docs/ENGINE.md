@@ -309,19 +309,30 @@ npx serve .         # o python3 -m http.server
    perfil Lite reduce pasos. La resolución adaptativa global ayuda.
 8. **Context restore** reconstruye el efecto desde cero (la composición se reinicia).
 
-## 11. Validación en la app real
+## 11. Panel de parámetros y URL
+
+La UI monta una sección `Parámetros` dinámica dentro del panel existente, usando
+`.panel-section-label`, `.panel-row` y `.btn`. Se genera desde `getEffectSchema()`:
+
+- sliders numéricos con rango/step del schema;
+- checkbox para booleanos;
+- seed con botón aleatorio;
+- botón `Reiniciar` que aplica los defaults.
+
+Los valores se guardan por efecto en el motor (`savedParams`) y se restauran al
+volver. Presets y URL los serializan; `?p={json}` restaura la configuración al cargar.
+
+## 12. Validación en la app real
 
 Ver [VALIDATION.md](VALIDATION.md): 19 efectos en el generador de `kndl000`,
 cuatro familias funcionando, cross-fade, Lite, audio, PNG y presets, sin errores de
 consola. La sincronización encontró y corrigió dos bugs (transición congelada y
 thumbnails negros).
 
-## 12. Próximos pasos (Slice 7+)
+## 13. Próximos pasos (Slice 8+)
 
-1. **Panel de parámetros genérico** en la UI (schema → controles) sin rediseñar.
-2. **Transiciones p5↔GPU**: compositing de un canvas 2D y un target WebGL.
-3. **Más variantes por familia** (atractores, túneles volumétricos, membranas celulares).
-4. **GPU timer queries** para métricas reales y adaptativo por costo de GPU.
-5. **Presets con seed** y parámetros en la URL compartida (hash corto).
-6. **Audio**: validación con micrófono real + calibración de beat por dispositivo.
-7. Evaluar **WebGPU** detrás de la misma interfaz.
+1. **Transiciones p5↔GPU**: compositing de un canvas 2D y un target WebGL.
+2. **Más variantes por familia** (atractores, túneles volumétricos, membranas celulares).
+3. **GPU timer queries** para métricas reales y adaptativo por costo de GPU.
+4. **Audio**: validación con micrófono real + calibración de beat por dispositivo.
+5. Evaluar **WebGPU** detrás de la misma interfaz.
