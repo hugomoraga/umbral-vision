@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { copyFile, mkdir } from 'node:fs/promises';
 
 const common = {
   entryPoints: ['src/index.js'],
@@ -21,4 +22,7 @@ await build({
   platform: 'neutral'
 });
 
-console.log('Built dist/index.mjs and dist/index.cjs');
+await mkdir('dist', { recursive: true });
+await copyFile('src/audio/audio-map.json', 'dist/audio-map.json');
+
+console.log('Built dist/index.mjs, dist/index.cjs and dist/audio-map.json');

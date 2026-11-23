@@ -1,0 +1,52 @@
+{
+  "sync": {
+    "mode": "grid",
+    "bpm": "auto",
+    "fallbackBpm": 128,
+    "minBpm": 80,
+    "maxBpm": 180,
+    "visualLatencyMs": 28
+  },
+  "kick": {
+    "rangeHz": [
+      35,
+      120
+    ],
+    "refractoryMs": 180,
+    "threshold": 1.55,
+    "minFlux": 0.006,
+    "depth": 0.7,
+    "decaySec": 1.5,
+    "spring": 18,
+    "damping": 4.5,
+    "cameraDolly": 0.03,
+    "bloomPulse": 0.18,
+    "sensitivity": 1.0
+  },
+  "bassBody": {
+    "attackMs": 80,
+    "releaseMs": 800,
+    "scale": 0.05
+  },
+  "midFlow": {
+    "attackMs": 120,
+    "releaseMs": 600,
+    "twist": 0.22,
+    "waveSpeed": 0.8,
+    "waveAmp": 0.12
+  },
+  "highShimmer": {
+    "attackMs": 15,
+    "releaseMs": 180,
+    "porosity": 0.5,
+    "microDisplace": 0.012
+  },
+  "volume": {
+    "exposure": 0.2,
+    "bloom": 0.15
+  },
+  "dynamics": {
+    "autoGain": 0.6,
+    "floor": 0.04
+  }
+}

@@ -34,6 +34,7 @@ import {
   tickAudio
 } from './AudioReactive.js';
 import { createEngine } from './engine/UmbralEngine.js';
+import { loadAudioMap, getAudioMap, setAudioOverride, resetAudioOverrides } from './audio/audioConfig.js';
 import { ENGINE_EFFECTS, isEngineEffect, getEngineEffectNames } from './engine/registry.js';
 import {
   startAutoTransition,
@@ -88,6 +89,7 @@ export {
   tickAudio
 };
 export { createEngine, ENGINE_EFFECTS, isEngineEffect, getEngineEffectNames };
+export { loadAudioMap, getAudioMap, setAudioOverride, resetAudioOverrides };
 export {
   startAutoTransition,
   stopAutoTransition,
@@ -142,7 +144,11 @@ export default {
     getState: getAudioState,
     getFrequencyData: getFrequencyData,
     getFeatures: getAudioFeatures,
-    tick: tickAudio
+    tick: tickAudio,
+    loadMap: loadAudioMap,
+    getMap: getAudioMap,
+    setOverride: setAudioOverride,
+    resetOverrides: resetAudioOverrides
   },
   Engine: {
     create: createEngine,

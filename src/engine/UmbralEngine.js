@@ -19,6 +19,7 @@ import { createEngineEffect, isEngineEffect } from './registry.js';
 import { tickAudio, getAudioFeatures } from '../AudioReactive.js';
 import { createFpsCounter } from '../perf/fpsCounter.js';
 import { getLiteMode } from '../perf/deviceProfile.js';
+import { getAudioMap } from '../audio/audioConfig.js';
 
 const DEFAULT_EFFECT = 'fluidFields';
 
@@ -166,9 +167,13 @@ export function createEngine(options = {}) {
     const sceneTo = effect.getSceneTarget();
     const basePost = effect.getPostParams();
     const audioAmount = audio.enabled ? (effect.params?.audio ?? 1) : 0;
+    const audioMap = getAudioMap();
+    const volumeExposure = Number(audioMap.volume?.exposure ?? 0.2);
+    const volumeBloom = Number(audioMap.volume?.bloom ?? 0.15);
+    const kickBloom = Number(audioMap.kick?.bloomPulse ?? 0.18);
     const audioPost = {
-      exposure: (basePost.exposure ?? 1) * (1 + (audio.rms * 0.35 + audio.beat * 0.15) * audioAmount),
-      bloomStrength: (basePost.bloomStrength ?? 1) * (1 + (audio.high * 0.42 + audio.beat * 0.5 + audio.rms * 0.2) * audioAmount)
+      exposure: (basePost.exposure ?? 1) * (1 + (audio.rms * volumeExposure + audio.kickFlash * volumeExposure * 0.6) * audioAmount),
+      bloomStrength: (basePost.bloomStrength ?? 1) * (1 + (audio.high * 0.3 + audio.rms * volumeBloom + audio.kickFlash * kickBloom) * audioAmount)
     };
     post.render(sceneFrom || sceneTo, renderer.output, {
       ...basePost,

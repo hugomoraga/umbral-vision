@@ -27,6 +27,7 @@ import { startAutoTransition, stopAutoTransition } from '../Transition.js';
 import { getLiteMode, setLiteMode } from '../perf/deviceProfile.js';
 import { createThumbnails } from './thumbnails.js';
 import { createEffectParams } from './effectParams.js';
+import { createAudioControls } from './audioControls.js';
 import { createSpectrum } from './spectrum.js';
 import { getPresets, savePreset, deletePreset } from './presets.js';
 import { downloadFrame, copyShareURL, parseShareURL } from './share.js';
@@ -251,6 +252,7 @@ export function mountStudioUI() {
   const effectParams = createEffectParams(paramsHost, {
     emptyText: 'Este efecto no expone parámetros en vivo.'
   });
+  const audioControls = createAudioControls(document.getElementById('audio-controls'));
 
   const tabButtons = [...panel.querySelectorAll('[data-uv-tab]')];
   const tabPanels = [...panel.querySelectorAll('[data-uv-panel]')];
@@ -597,6 +599,7 @@ export function mountStudioUI() {
     }
   }
   setInterval(refreshStats, 600);
+  setInterval(() => audioControls.refresh(), 120);
 
   // ---- atajos ------------------------------------------------------------
   initKeyboard({

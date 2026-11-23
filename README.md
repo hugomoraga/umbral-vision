@@ -22,8 +22,9 @@ Cuatro familias visuales con técnicas distintas:
 - Simulación GPU con texturas ping-pong (MRT) y estado determinista por seed.
 - Pipeline HDR: bright pass, bloom multi-mip, tonemap ACES, viñeta, grano y aberración.
 - **Cross-fade** entre efectos GPU antes del bloom.
-- **Audio reactivo profundo**: bandas graves/medios/agudos con deformación distinta,
-  volumen RMS, spectral flux / beat, y espectro en vivo con medidores B/M/A.
+- **Audio reactivo profundo**: kick con detección de tempo y grilla 4/4, bandas
+  graves/medios/agudos con deformación distinta, volumen RMS y espectro en vivo.
+  Todos los valores viven en `src/audio/audio-map.json`.
 - **Studio UI**: panel por tabs, parámetros agrupados, presets, dock de efectos,
   transporte, modo inmersivo con auto-hide y responsive móvil.
 - Perfiles `lite` / `high` / `ultra` + resolución adaptativa.
@@ -46,6 +47,8 @@ import { startVisualizer, setEffectParameters } from '@kndl/umbral-vision';
 startVisualizer('fluidFields');                  // efecto GPU
 setEffectParameters({ speed: 1.3, hue: 0.03 });   // parámetros en runtime
 startVisualizer('organicStructures');             // cross-fade automático (1s)
+// La reacción musical se ajusta en src/audio/audio-map.json
+// o en runtime: setAudioOverride('kick.depth', 0.9)
 ```
 
 O sin la UI:
@@ -143,6 +146,16 @@ startAutoTransition(10000, ['tunnel', 'spiral', 'mandala'], (effectName) => {
 - `ENGINE_EFFECTS` — Registro de efectos GPU
 - `isEngineEffect(name)` / `getEngineEffectNames()`
 
+### Audio map
+
+- `loadAudioMap(url?)` — carga/recarga `audio-map.json` + overrides
+- `getAudioMap()` — configuración efectiva
+- `setAudioOverride('kick.depth', 0.9)` — override en vivo (persiste en localStorage)
+- `resetAudioOverrides()` — vuelve al JSON/backend
+
+El archivo editable es `src/audio/audio-map.json` (se copia a `dist/` en el build).
+También se puede inyectar `window.UV_AUDIO_MAP` desde el backend.
+
 ### AudioReactive
 
 - `initAudio()` — Inicializa análisis de audio del micrófono (async)
@@ -187,9 +200,12 @@ La studio UI muestra parámetros generados desde el schema, los conserva por efe
 los comparte por URL (`p=`). La interfaz se oculta sola al quedar inactiva y vuelve al
 mover el mouse; `H` alterna el modo inmersivo.
 
-Espectro y bandas en vivo:
+Controles de audio y espectro en vivo:
 
 ![Studio con audio](https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/studio-audio.png)
+
+El kick genera un impulso físico (spring-damper) sincronizado a la grilla 4/4;
+los medios y agudos deforman la superficie de forma continua, sin jitter.
 
 ## Peer Dependencies
 

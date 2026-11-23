@@ -1,7 +1,7 @@
 # Validación en la aplicación real (kndl000)
 
 Fecha: 2026-11-23
-Versión validada: **0.7.0**
+Versión validada: **0.8.0**
 
 ![Studio](media/studio.png)
 
@@ -48,6 +48,26 @@ Versión validada: **0.7.0**
 | Errores | **0** |
 
 ![Panel de parámetros](media/app-params.png)
+
+## Kick + tempo + config (v0.8.0)
+
+| Comprobación | Resultado |
+|---|---|
+| Kick en loop techno 130 BPM | onsets regulares; BPM estabilizado ≈128.6 |
+| Modo `grid` | ~1 trigger por negra (18 en 8 s) |
+| Modo `kick` | responde a onsets reales (10 en 5 s) |
+| Modo `off` | 0 triggers |
+| Latencia visual | 28 ms (configurable) |
+| Spring-damper de Organic | `kickPos` sube suave a ~0.6 y decae sin jitter |
+| Controles UI | Sincronía, BPM auto/manual, Kick, Retumbe, Sensibilidad, Torsión, Shimmer, Volumen, Dinámica |
+| BPM auto/manual | toggle funciona; valor manual se persiste en overrides |
+| JSON | servido en `/assets/js/umbral-vision/src/audio/audio-map.json` |
+| Tests | 113 passing |
+| Errores consola | 0 |
+
+Nota: la medición de BPM en tiempo real con SwiftShader es limitada porque el loop
+corre a 1–3 fps; la validación de detección/tempo se hizo con ticks deterministas a
+60 fps y con un WAV sintético de techno 4/4.
 
 ## Rediseño studio + audio dinámico (v0.7.0)
 

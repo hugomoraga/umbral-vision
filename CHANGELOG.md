@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-23
+
+### Added
+- **Kick detector + tempo tracker**: onset en 35–120 Hz, refractario adaptativo,
+  BPM por intervalos plegados y confianza. Modos `grid` (4/4), `kick` y `off`.
+- **`src/audio/audio-map.json`**: fuente de verdad para todos los valores de
+  reacción (kick, spring/damping, envelopes, twist, shimmer, volumen, dinámica).
+  Overrides por `window.UV_AUDIO_MAP` y por la UI en localStorage.
+- **Controles de audio** en el panel: sincronía, BPM auto/manual, kick, retumbe,
+  sensibilidad, torsión, shimmer, volumen y dinámica, con BPM/fase/confianza en vivo.
+- **Organic Structures pilot**: impulso físico spring-damper del kick, onda de
+  kick viajera, respiración lenta de graves, torsión/ondas de medios y porosidad /
+  micro-shimmer de agudos.
+- Triggers visuales con latencia configurable (28 ms).
+- Endurecimiento del análisis: `kickFlash` rápido para bloom, `kick` lento para cuerpo.
+
+### Changed
+- `getAudioFeatures()` agrega `bassBody`, `midFlow`, `highShimmer`, `kick`,
+  `kickFlash`, `kickTrigger`, `kickOnset`, `bpm`, `beatPhase`, `tempoConfidence`.
+- `getAudioState()` agrega `kick`, `bpm` y `mode`.
+- El post-proceso modula bloom con el transiente rápido y exposición con volumen.
+
 ## [0.7.0] - 2026-11-23
 
 ### Added

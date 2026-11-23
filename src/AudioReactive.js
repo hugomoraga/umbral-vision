@@ -1,15 +1,18 @@
 /**
- * AudioReactive — análisis de audio reactivo con cleanup completo.
+ * AudioReactive — análisis musical con kick, tempo y bandas.
  *
- * v0.7: análisis pensado para reactividad visible:
- *  - bandas graves / medios / agudos con auto-ganancia por banda
- *  - RMS global (volumen) y nivel normalizado
- *  - spectral flux + beat detection
- *  - smoothing independiente del framerate (attack/release en segundos)
+ * v0.8:
+ *  - bandas graves/medios/agudos con ganancia global (conserva la relación)
+ *  - volumen RMS absoluto
+ *  - envolventes lentas por banda para movimiento (bass body / mid flow / shimmer)
+ *  - detección de kick por flux en la banda baja + refractario
+ *  - tracking de BPM y fase; modo `grid` (4/4), `kick` o `off`
+ *  - triggers visuales con latencia configurable
  *
- * `getAudioFeatures()` retorna el MISMO objeto cada frame; consumirlo dentro
- * del frame. `getFrequencyData()` también reutiliza el buffer.
+ * getAudioFeatures() retorna el MISMO objeto cada frame.
  */
+
+import { getAudioMap } from './audio/audioConfig.js';
 
 let audioContext = null;
 let analyser = null;
@@ -26,7 +29,7 @@ const RELEASE_TAU = 0.22;
 const LEVEL_ATTACK_TAU = 0.035;
 const LEVEL_RELEASE_TAU = 0.16;
 const BEAT_HISTORY = 30;
-const BEAT_COOLDOWN = 0.12;
+const KICK_HISTORY = 32;
 
 const BANDS = {
   bass: [20, 160],
@@ -43,19 +46,52 @@ const features = {
   high: 0,
   beat: 0,
   energy: 0,
-  flux: 0
+  flux: 0,
+  bassBody: 0,
+  midFlow: 0,
+  highShimmer: 0,
+  kick: 0,
+  kickFlash: 0,
+  kickTrigger: false,
+  kickStrength: 0,
+  kickOnset: false,
+  kickInterval: 0,
+  kickFlux: 0,
+  kickEnergy: 0,
+  bpm: 0,
+  beatPhase: 0,
+  tempoConfidence: 0,
+  syncMode: 'grid'
 };
 
 let gainPeak = 0.12;
+let audioClock = 0;
+
 const fluxHistory = new Float32Array(BEAT_HISTORY);
 let fluxIndex = 0;
 let fluxFilled = 0;
 let beatEnvelope = 0;
 let lastBeatAt = -10;
-let audioClock = 0;
+
+const kickFluxHistory = new Float32Array(KICK_HISTORY);
+let kickFluxIndex = 0;
+let kickFluxFilled = 0;
+
+let lastOnsetAt = -10;
+let lastOnsetStrength = 0;
+let prevKickEnergy = 0;
+let lastVisualKickAt = -10;
+let kickEnvelope = 0;
+let kickFlash = 0;
+const onsetIntervals = [];
+let bpmEstimate = 0;
+let tempoConfidence = 0;
+let gridNextAt = 0;
+let pendingTriggers = [];
+let lastMode = null;
 
 // ---------------------------------------------------------------------------
-// Funciones puras (testeables)
+// Utilidades puras
 // ---------------------------------------------------------------------------
 
 function averageRange(data, from, to) {
@@ -71,7 +107,6 @@ function averageRange(data, from, to) {
  * @param {Uint8Array} data
  * @param {number} sampleRate
  * @param {number} fftSize
- * @returns {{bass:number, mid:number, high:number, rms:number}}
  */
 export function computeBands(data, sampleRate = 44100, fftSize = FFT_SIZE) {
   if (!data || data.length === 0) return { bass: 0, mid: 0, high: 0, rms: 0 };
@@ -84,118 +119,335 @@ export function computeBands(data, sampleRate = 44100, fftSize = FFT_SIZE) {
     const v = data[i] / 255;
     squareSum += v * v;
   }
-  const rms = Math.sqrt(squareSum / binCount) * 1.6;
+  const rms = Math.min(1, Math.sqrt(squareSum / binCount) * 1.6);
 
-  const validHz = Number.isFinite(sampleRate) && sampleRate > 0;
-  const ranges = validHz
-    ? {
-        bass: [idx(BANDS.bass[0]), idx(BANDS.bass[1])],
-        mid: [idx(BANDS.mid[0]), idx(BANDS.mid[1])],
-        high: [idx(BANDS.high[0]), idx(BANDS.high[1])]
-      }
-    : {
-        bass: [0, binCount * 0.05],
-        mid: [binCount * 0.05, binCount * 0.4],
-        high: [binCount * 0.4, binCount * 0.9]
-      };
+  const ranges = {
+    bass: [idx(BANDS.bass[0]), idx(BANDS.bass[1])],
+    mid: [idx(BANDS.mid[0]), idx(BANDS.mid[1])],
+    high: [idx(BANDS.high[0]), idx(BANDS.high[1])]
+  };
 
   return {
     bass: averageRange(data, ranges.bass[0], ranges.bass[1]),
     mid: averageRange(data, ranges.mid[0], ranges.mid[1]),
     high: averageRange(data, ranges.high[0], ranges.high[1]),
-    rms: Math.min(1, rms)
+    rms
   };
 }
 
-// ---------------------------------------------------------------------------
-// Análisis
-// ---------------------------------------------------------------------------
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function mad(values, center) {
+  if (!values.length) return 0;
+  return values.reduce((sum, v) => sum + Math.abs(v - center), 0) / values.length;
+}
 
 function smooth(current, target, dt, attackTau = ATTACK_TAU, releaseTau = RELEASE_TAU) {
   const tau = target > current ? attackTau : releaseTau;
-  const alpha = 1 - Math.exp(-Math.max(0, dt) / tau);
+  const alpha = 1 - Math.exp(-Math.max(0, dt) / Math.max(0.001, tau));
   return current + (target - current) * alpha;
 }
 
-function autoGain(rawMax, dt) {
+function tauFromMs(ms, fallback) {
+  const value = Number(ms);
+  return Number.isFinite(value) && value > 0 ? value / 1000 / 3 : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function autoGain(rawMax, dt, map) {
   const decay = Math.pow(0.996, Math.max(0, dt) * 60);
   gainPeak = Math.max(rawMax, gainPeak * decay);
-  return Math.max(gainPeak * 0.88, 0.045);
+  const auto = clamp(Number(map.dynamics?.autoGain ?? 0.6), 0, 1);
+  const floor = Math.max(0.01, Number(map.dynamics?.floor ?? 0.04));
+  return Math.max(gainPeak * (1 - auto * 0.35), floor);
 }
 
 function resetFeatures() {
   features.enabled = false;
-  features.level = 0;
-  features.rms = 0;
-  features.bass = 0;
-  features.mid = 0;
-  features.high = 0;
-  features.beat = 0;
-  features.energy = 0;
-  features.flux = 0;
-  beatEnvelope = 0;
-  lastBeatAt = -10;
+  for (const key of Object.keys(features)) {
+    if (key === 'syncMode') features[key] = 'grid';
+    else if (key === 'kickTrigger' || key === 'kickOnset' || key === 'enabled') features[key] = false;
+    else features[key] = 0;
+  }
+  gainPeak = 0.12;
   audioClock = 0;
   fluxIndex = 0;
   fluxFilled = 0;
   fluxHistory.fill(0);
-  gainPeak = 0.12;
+  beatEnvelope = 0;
+  lastBeatAt = -10;
+  kickFluxIndex = 0;
+  kickFluxFilled = 0;
+  kickFluxHistory.fill(0);
+  lastOnsetAt = -10;
+  lastOnsetStrength = 0;
+  prevKickEnergy = 0;
+  lastVisualKickAt = -10;
+  kickEnvelope = 0;
+  kickFlash = 0;
+  onsetIntervals.length = 0;
+  bpmEstimate = 0;
+  tempoConfidence = 0;
+  gridNextAt = 0;
+  pendingTriggers = [];
+  lastMode = null;
   if (prevSpectrum) prevSpectrum.fill(0);
 }
 
-function analyze(dt) {
-  const sampleRate = analyser.context?.sampleRate || 44100;
-  const raw = computeBands(dataArray, sampleRate, analyser.fftSize || FFT_SIZE);
+// ---------------------------------------------------------------------------
+// Kick + tempo
+// ---------------------------------------------------------------------------
 
-  const volumeTarget = Math.min(1.5, raw.rms * 2.6);
-  // Una ganancia global (no por banda) conserva la relación graves/medios/agudos.
-  const gain = autoGain(Math.max(raw.bass, raw.mid, raw.high), dt);
+function updateTempo(now, interval) {
+  const map = getAudioMap();
+  const minBpm = Number(map.sync?.minBpm ?? 80);
+  const maxBpm = Number(map.sync?.maxBpm ?? 180);
+  const minInterval = 60 / maxBpm;
+  const maxInterval = 60 / minBpm;
+
+  if (interval < minInterval || interval > maxInterval) return;
+
+  onsetIntervals.push(interval);
+  if (onsetIntervals.length > 8) onsetIntervals.shift();
+
+  const med = median(onsetIntervals);
+  bpmEstimate = med > 0 ? clamp(60 / med, minBpm, maxBpm) : 0;
+  const deviation = med > 0 ? mad(onsetIntervals, med) / med : 1;
+  const countConfidence = clamp(onsetIntervals.length / 4, 0, 1);
+  tempoConfidence = clamp((1 - deviation * 7) * countConfidence, 0, 1);
+}
+
+function effectiveBpm(map) {
+  const manual = map.sync?.bpm;
+  if (typeof manual === 'number' && Number.isFinite(manual)) {
+    return clamp(manual, Number(map.sync?.minBpm ?? 80), Number(map.sync?.maxBpm ?? 180));
+  }
+  return bpmEstimate || Number(map.sync?.fallbackBpm ?? 128);
+}
+
+function scheduleKick(strength, at, map) {
+  const latency = Math.max(0, Number(map.sync?.visualLatencyMs ?? 28)) / 1000;
+  pendingTriggers.push({ at: at + latency, strength: clamp(strength, 0, 1) });
+  if (pendingTriggers.length > 8) pendingTriggers.shift();
+}
+
+function fireKick(strength, now) {
+  lastVisualKickAt = now;
+  kickEnvelope = strength;
+  kickFlash = 1;
+  features.kick = strength;
+  features.kickFlash = 1;
+  features.kickTrigger = true;
+  features.kickStrength = strength;
+}
+
+function processTriggers(now) {
+  if (!pendingTriggers.length) return;
+  const due = [];
+  pendingTriggers = pendingTriggers.filter((item) => {
+    if (item.at <= now) {
+      due.push(item);
+      return false;
+    }
+    return true;
+  });
+  if (due.length) {
+    const strongest = due.reduce((a, b) => (b.strength > a.strength ? b : a));
+    fireKick(strongest.strength, now);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Análisis por frame
+// ---------------------------------------------------------------------------
+
+function analyze(dt) {
+  const map = getAudioMap();
+  const sampleRate = analyser.context?.sampleRate || 44100;
+  const fftSize = analyser.fftSize || FFT_SIZE;
+  const raw = computeBands(dataArray, sampleRate, fftSize);
+
+  features.syncMode = map.sync?.mode || 'grid';
+  features.kickTrigger = false;
+  features.kickOnset = false;
+
+  if (features.syncMode !== lastMode) {
+    pendingTriggers = [];
+    gridNextAt = 0;
+    lastMode = features.syncMode;
+  }
+
+  // Bandas normalizadas con una ganancia global.
+  const gain = autoGain(Math.max(raw.bass, raw.mid, raw.high), dt, map);
   const nbass = Math.min(1.5, raw.bass / gain);
   const nmid = Math.min(1.5, raw.mid / gain);
   const nhigh = Math.min(1.5, raw.high / gain);
 
-  features.rms = smooth(features.rms, volumeTarget, dt, LEVEL_ATTACK_TAU, LEVEL_RELEASE_TAU);
+  features.rms = smooth(features.rms, Math.min(1.5, raw.rms * 2.6), dt, LEVEL_ATTACK_TAU, LEVEL_RELEASE_TAU);
   features.bass = smooth(features.bass, nbass, dt);
   features.mid = smooth(features.mid, nmid, dt);
   features.high = smooth(features.high, nhigh, dt);
 
+  // Envolventes lentas para gestos (no para tiritar).
+  features.bassBody = smooth(features.bassBody, nbass, dt,
+    tauFromMs(map.bassBody?.attackMs, 0.06), tauFromMs(map.bassBody?.releaseMs, 0.6));
+  features.midFlow = smooth(features.midFlow, nmid, dt,
+    tauFromMs(map.midFlow?.attackMs, 0.08), tauFromMs(map.midFlow?.releaseMs, 0.5));
+  features.highShimmer = smooth(features.highShimmer, nhigh, dt,
+    tauFromMs(map.highShimmer?.attackMs, 0.02), tauFromMs(map.highShimmer?.releaseMs, 0.18));
+
   features.energy = features.bass * 0.55 + features.mid * 0.3 + features.high * 0.15;
   features.level = Math.min(1, features.rms * 1.15 + features.energy * 0.22);
 
-  // Spectral flux: onsets reales (cambios positivos del espectro).
+  // --- spectral flux global y de la banda de kick ---
   let flux = 0;
+  let kickFlux = 0;
+  let kickEnergy = 0;
   const n = dataArray.length;
+  const lowA = Number(map.kick?.rangeHz?.[0] ?? 35);
+  const lowB = Number(map.kick?.rangeHz?.[1] ?? 120);
+  const hzPerBin = sampleRate / fftSize;
+  const lowStart = Math.max(1, Math.floor(lowA / hzPerBin));
+  const lowEnd = Math.min(n - 1, Math.ceil(lowB / hzPerBin));
+
   if (prevSpectrum && prevSpectrum.length === n) {
     for (let i = 0; i < n; i++) {
       const delta = dataArray[i] - prevSpectrum[i];
-      if (delta > 0) flux += delta;
+      if (delta > 0) {
+        flux += delta;
+        if (i >= lowStart && i <= lowEnd) kickFlux += delta;
+      }
       prevSpectrum[i] = dataArray[i];
     }
-    flux = (flux / n / 255) * 3.2;
   } else {
     prevSpectrum = new Float32Array(n);
     for (let i = 0; i < n; i++) prevSpectrum[i] = dataArray[i];
   }
 
+  for (let i = lowStart; i <= lowEnd; i++) kickEnergy += dataArray[i];
+  kickEnergy = kickEnergy / Math.max(1, lowEnd - lowStart + 1) / 255;
+  const kickRise = kickEnergy - prevKickEnergy;
+  prevKickEnergy = kickEnergy;
+  flux = (flux / n / 255) * 3.2;
+  kickFlux = (kickFlux / Math.max(1, lowEnd - lowStart + 1) / 255) * 6.5;
+
+  // Beat global (compatibilidad / p5).
   fluxHistory[fluxIndex] = flux;
   fluxIndex = (fluxIndex + 1) % BEAT_HISTORY;
   if (fluxFilled < BEAT_HISTORY) fluxFilled++;
-
-  let avg = 0;
-  for (let i = 0; i < fluxFilled; i++) avg += fluxHistory[i];
-  avg = fluxFilled > 0 ? avg / fluxFilled : 0;
+  let fluxAvg = 0;
+  for (let i = 0; i < fluxFilled; i++) fluxAvg += fluxHistory[i];
+  fluxAvg = fluxFilled > 0 ? fluxAvg / fluxFilled : 0;
 
   beatEnvelope *= Math.exp(-dt / 0.14);
   if (beatEnvelope < 0.001) beatEnvelope = 0;
-
-  if (fluxFilled === BEAT_HISTORY
-      && flux > avg * 1.55
-      && flux > 0.012
-      && audioClock - lastBeatAt > BEAT_COOLDOWN) {
+  if (fluxFilled === BEAT_HISTORY && flux > fluxAvg * 1.55 && flux > 0.012
+      && audioClock - lastBeatAt > 0.12) {
     beatEnvelope = 1;
     lastBeatAt = audioClock;
   }
   features.beat = beatEnvelope;
+
+  // Kick onset.
+  kickFluxHistory[kickFluxIndex] = kickFlux;
+  kickFluxIndex = (kickFluxIndex + 1) % KICK_HISTORY;
+  if (kickFluxFilled < KICK_HISTORY) kickFluxFilled++;
+  let kickAvg = 0;
+  for (let i = 0; i < kickFluxFilled; i++) kickAvg += kickFluxHistory[i];
+  kickAvg = kickFluxFilled > 0 ? kickAvg / kickFluxFilled : 0;
+
+  const threshold = Math.max(1.05, Number(map.kick?.threshold ?? 1.55));
+  const minFlux = Math.max(0.001, Number(map.kick?.minFlux ?? 0.006));
+  const beatInterval = bpmEstimate > 0 ? 60 / effectiveBpm(map) : 0;
+  const refractory = Math.max(
+    Math.max(0.05, Number(map.kick?.refractoryMs ?? 180) / 1000),
+    beatInterval * 0.85
+  );
+  const sensitivity = clamp(Number(map.kick?.sensitivity ?? 1), 0.2, 4);
+
+  const isOnset = kickFluxFilled >= 6
+    && kickFlux > kickAvg * threshold / sensitivity
+    && kickFlux > minFlux
+    && kickEnergy > 0.04
+    && kickRise > 0.025
+    && audioClock - lastOnsetAt > refractory;
+
+  if (isOnset) {
+    const strength = clamp(
+      0.35 + kickFlux / Math.max(0.001, kickAvg * threshold) * 0.45 + kickEnergy * 0.5,
+      0.35,
+      1
+    );
+    let interval = audioClock - lastOnsetAt;
+    if (lastOnsetAt >= 0) {
+      // Pliega intervalos al rango musical: evita que un onset extra (medio
+      // tiempo) duplique el BPM. 80–180 BPM ⇒ 0.333–0.75 s.
+      const minInterval = 60 / Number(map.sync?.maxBpm ?? 180);
+      const maxInterval = 60 / Number(map.sync?.minBpm ?? 80);
+      let folded = interval;
+      while (folded > 0 && folded < minInterval) folded *= 2;
+      while (folded > maxInterval) folded /= 2;
+      interval = folded;
+      features.kickInterval = interval;
+      updateTempo(audioClock, interval);
+    }
+    features.kickOnset = true;
+    lastOnsetAt = audioClock;
+    lastOnsetStrength = strength;
+
+    if (map.sync?.mode === 'kick') {
+      scheduleKick(strength, audioClock, map);
+    } else if (map.sync?.mode === 'grid' && !bpmEstimate) {
+      // Sin BPM todavía: fallback al kick real.
+      scheduleKick(strength, audioClock, map);
+    }
+  }
+
+  // Trigger de grilla 4/4.
+  if (map.sync?.mode === 'grid' && (bpmEstimate > 0 || typeof map.sync?.bpm === 'number')) {
+    const interval = 60 / effectiveBpm(map);
+    if (!gridNextAt || gridNextAt < audioClock - interval * 2) {
+      gridNextAt = (lastOnsetAt >= 0 ? lastOnsetAt : audioClock) + interval;
+    }
+    let guard = 0;
+    while (audioClock >= gridNextAt && guard < 2) {
+      const recent = audioClock - lastOnsetAt;
+      const strength = recent < interval * 1.45
+        ? Math.max(0.4, lastOnsetStrength * (1 - recent / (interval * 2)))
+        : 0.35;
+      scheduleKick(strength, gridNextAt, map);
+      gridNextAt += interval;
+      guard++;
+    }
+  }
+
+  // Envelope de kick + triggers con latencia visual.
+  const kickDecay = Math.max(0.15, Number(map.kick?.decaySec ?? 1.5));
+  kickEnvelope *= Math.exp(-dt / kickDecay);
+  if (kickEnvelope < 0.001) kickEnvelope = 0;
+  kickFlash *= Math.exp(-dt / 0.18);
+  if (kickFlash < 0.001) kickFlash = 0;
+  processTriggers(audioClock);
+  features.kick = kickEnvelope;
+  features.kickFlash = kickFlash;
+  features.kickFlux = kickFlux;
+  features.kickEnergy = kickEnergy;
+
+  const bpm = effectiveBpm(map);
+  features.bpm = bpmEstimate > 0 || typeof map.sync?.bpm === 'number' ? Math.round(bpm * 10) / 10 : 0;
+  features.tempoConfidence = typeof map.sync?.bpm === 'number' ? 1 : tempoConfidence;
+  features.beatPhase = features.bpm > 0 && lastVisualKickAt >= 0
+    ? ((audioClock - lastVisualKickAt) / (60 / features.bpm)) % 1
+    : 0;
+
   features.flux = flux;
   features.enabled = true;
   audioClock += dt;
@@ -244,10 +496,6 @@ export async function initAudio() {
   return true;
 }
 
-/**
- * Tick de audio — llamar desde el render loop activo.
- * @param {number} [dt] segundos desde el frame anterior
- */
 export function tickAudio(dt = 1 / 60) {
   if (!audioEnabled || !analyser || !dataArray) {
     if (features.enabled) resetFeatures();
@@ -268,17 +516,14 @@ export async function stopAudio() {
     try { microphone.disconnect(); } catch { /* noop */ }
     microphone = null;
   }
-
   if (analyser) {
     try { analyser.disconnect(); } catch { /* noop */ }
     analyser = null;
   }
-
   if (audioStream) {
     try { audioStream.getTracks().forEach(track => track.stop()); } catch { /* noop */ }
     audioStream = null;
   }
-
   if (audioContext && audioContext.state !== 'closed') {
     try { await audioContext.close(); } catch { /* noop */ }
   }
@@ -289,22 +534,19 @@ export async function stopAudio() {
 }
 
 export function getAudioState() {
-  return { enabled: audioEnabled, level: features.level };
+  return {
+    enabled: audioEnabled,
+    level: features.level,
+    kick: features.kick,
+    bpm: features.bpm,
+    mode: features.syncMode
+  };
 }
 
-/**
- * Features de audio para el motor GPU.
- * Mismo objeto cada frame; no copiar.
- * @returns {{enabled:boolean, level:number, rms:number, bass:number, mid:number, high:number, beat:number, energy:number, flux:number}}
- */
 export function getAudioFeatures() {
   return features;
 }
 
-/**
- * Buffer FFT reutilizado. Consumir dentro del frame.
- * @returns {Uint8Array|null}
- */
 export function getFrequencyData() {
   return dataArray;
 }

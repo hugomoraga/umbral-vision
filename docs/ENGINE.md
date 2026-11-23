@@ -1,6 +1,6 @@
-# Umbral Vision — Generative Visual Engine (v0.7)
+# Umbral Vision — Generative Visual Engine (v0.8)
 
-Estado: **Slices 1–7 implementados + studio UI + audio reactivo profundo**.
+Estado: **Slices 1–7 + studio UI + motor de audio con kick/tempo (v0.8)**.
 Cuatro familias GPU: **Fluid Fields**, **Organic Structures**, **Mathematical Forms** y
 **Temporal Systems**. Los 15 efectos p5 siguen funcionando sin cambios.
 
@@ -23,6 +23,10 @@ Cuatro familias GPU: **Fluid Fields**, **Organic Structures**, **Mathematical Fo
 ## 2. Arquitectura
 
 ```
+src/audio/
+  audio-map.json           configuración de reacción musical
+  audioConfig.js           fetch + merge + overrides
+
 src/engine/
   UmbralEngine.js          loop, ciclo de vida, audio, métricas, calidad
   registry.js              catálogo GPU + preview 2D para thumbnails
@@ -183,189 +187,70 @@ engine.setEffect('organicStructures', undefined, { transitionMs: 1000 });
 
 ![Cross-fade Fluid → Organic](media/crossfade.png)
 
-## 6. Audio → visual (v0.7)
+## 6. Audio → visual (v0.8)
 
-`AudioReactive` analiza un FFT de **2048** con smoothing del analizador bajo (0.35) y
-calcula por frame features reutilizadas:
+### Detector y sincronía
 
-| Feature | Cálculo | Uso |
-|---|---|---|
-| `bass` (20–160 Hz) | promedio de bins / ganancia global | zoom de cámara, escala, onda radial, velocidad |
-| `mid` (160–2000 Hz) | idem | ondulación lateral, roll de cámara, warp / rotate |
-| `high` (2–12 kHz) | idem | shimmer de superficie, tamaño de partículas, aberración |
-| `rms` | volumen absoluto (RMS × 2.6) | intensidad global, exposición y bloom |
-| `level` | RMS + energía de bandas | nivel para los efectos p5 |
-| `beat` | spectral flux vs media móvil (30 frames) | impulsos y picos de brillo |
-| `flux` / `energy` | flujo espectral / mezcla de bandas | disponibles para efectos |
+- Kick: spectral flux en **35–120 Hz**, umbral adaptativo, refractario configurable
+  (mínimo adaptativo de 0.85 × negra para evitar dobles onsets).
+- Tempo: intervalos entre kicks plegados al rango 80–180 BPM, mediana + MAD para
+  confianza. BPM manual posible.
+- Modos: `grid` (4/4), `kick` (onset real), `off`.
+- Trigger visual con **latencia configurable** (28 ms por defecto).
+- Un onset no mueve la geometría: genera una señal `kickTrigger` que el efecto
+  convierte en **impulso físico** (spring-damper).
 
-- La **ganancia es global**, no por banda: preserva la relación graves/medios/agudos.
-  Antes cada banda se normalizaba a sí misma y todas terminaban con el mismo valor,
-  lo que hacía que la reacción se viera estática.
-- Smoothing independiente del framerate: attack 45 ms, release 220 ms.
-- `tickAudio(dt)` recibe el delta del loop activo (p5 o GPU).
-- `beat` se calcula con spectral flux y cooldown de 120 ms; en un golpe vale 1.
+### Features
 
-### Mapa de deformación por banda
+| Feature | Uso |
+|---|---|
+| `bassBody` | respiración lenta, escala y cuerpo |
+| `midFlow` | ondulación/torsión continua, fase viajera |
+| `highShimmer` | porosidad, shimmer y micro-desplazamiento |
+| `kick` | envelope lento del golpe (cuerpo / retumbe) |
+| `kickFlash` | transiente rápido para bloom/exposición |
+| `kickTrigger` / `kickStrength` | evento de golpe |
+| `bpm` / `beatPhase` / `tempoConfidence` | grilla e indicadores UI |
+| `rms` | volumen absoluto |
 
-| Familia | Graves | Medios | Agudos | Volumen / beat |
-|---|---|---|---|---|
-| Fluid Fields | velocidad, zoom, impulso radial | flujo/curl, fase de cámara | tamaño/brillo de partículas | exposición, bloom, pulso |
-| Organic Structures | escala, onda viajera, zoom | ondulación lateral, rotación | shimmer de superficie, glow | brillo, bloom, pulso |
-| Mathematical Forms | zoom, potencia del fractal | roll de cámara, warp | warp de alta frecuencia | glow, exposición |
-| Temporal Veil | zoom del feedback, emisión | rotación de estelas | aberración, detalle | bloom, pulso |
+### Configuración: `src/audio/audio-map.json`
 
-La UI muestra un **espectro en vivo** (42 barras logarítmicas coloreadas por banda +
-medidores B/M/A) y el motor modula exposición/bloom globalmente con RMS y beat.
-El audio ya no es un cambio de color: deforma geometría, cámara y simulación.
+Todos los valores abstractos viven en el JSON:
+
+```json
+{
+  "sync": { "mode": "grid", "bpm": "auto", "fallbackBpm": 128,
+            "minBpm": 80, "maxBpm": 180, "visualLatencyMs": 28 },
+  "kick": { "rangeHz": [35, 120], "refractoryMs": 180, "threshold": 1.55,
+            "minFlux": 0.006, "sensitivity": 1, "depth": 0.7,
+            "decaySec": 1.5, "spring": 18, "damping": 4.5,
+            "cameraDolly": 0.03, "bloomPulse": 0.18 },
+  "bassBody": { "attackMs": 80, "releaseMs": 800, "scale": 0.05 },
+  "midFlow": { "attackMs": 120, "releaseMs": 600, "twist": 0.22,
+               "waveSpeed": 0.8, "waveAmp": 0.12 },
+  "highShimmer": { "attackMs": 15, "releaseMs": 180,
+                   "porosity": 0.5, "microDisplace": 0.012 },
+  "volume": { "exposure": 0.2, "bloom": 0.15 },
+  "dynamics": { "autoGain": 0.6, "floor": 0.04 }
+}
+```
+
+Prioridad: defaults embebidos → `audio-map.json` → `window.UV_AUDIO_MAP` → overrides
+de la UI en localStorage. El JSON se puede editar sin tocar código.
+
+### Organic Structures (piloto)
+
+| Señal | Respuesta |
+|---|---|
+| Kick | spring físico: escala + onda radial viajera + micro-dolly + `kickFlash` en bloom |
+| Graves | respiración lenta de escala y desplazamiento |
+| Medios | torsión acumulada + onda lateral viajera (fase, no jitter) |
+| Agudos | porosidad y shimmer en fragment + micro-desplazamiento de superficie |
+| Volumen | bloom/exposición moderados |
+
+La UI expone sincronía, BPM auto/manual, kick, retumbe, sensibilidad, torsión,
+shimmer, volumen y dinámica, más BPM/fase/confianza en vivo.
+
+![Controles de audio](media/audio-controls.png)
 
 ## 7. Studio UI (v0.7)
-
-La interfaz se rediseñó como un instrumento visual:
-
-- Top bar editorial (KNDL / Umbral Vision), estado de render, backend y menú Explore.
-- Panel derecho con título serif, tabs Parámetros / Presets / Info, grupos colapsables
-  generados desde el schema y espectro de audio.
-- Dock inferior con los 19 efectos, transporte (prev/pausa/next), auto-transición,
-  audio, preset, captura y share.
-- **Modo inmersivo**: la UI se retira sola tras 4.2 s de inactividad y vuelve al mover
-  el mouse o tocar. `H` la oculta/muestra; el botón de panel controla solo el panel.
-- Responsive: panel a pantalla completa sobre canvas en móvil, dock compacto.
-
-![Studio inmersivo](media/studio-immersive.png)
-![Studio con audio](media/studio-audio.png)
-
-## 8. Rendimiento y calidad
-
-| Perfil | Partículas | DPR máx | render scale | Bloom mips | Blur taps |
-|---|---:|---:|---:|---:|---:|
-| Lite | 16 384 | 1.0 | 0.70 | 1 | 5 |
-| High | 65 536 | 1.5 | 0.90 | 2 | 9 |
-| Ultra | 262 144 | 2.0 | 1.00 | 3 | 9 |
-
-- **Resolución adaptativa**: baja 0.10 de escala tras 45 frames lentos (> target),
-  recupera 0.05 tras 180 frames rápidos. Targets: Lite 22 ms, High 19 ms, Ultra 15 ms.
-- **Presupuesto**: `dt` limitado a 50 ms; 1 paso de simulación por frame; `gl.finish`
-  nunca se usa en producción.
-- **CPU**: inicialización de buffers una vez; uniforms por nombre cacheado; sin
-  allocations por frame en el loop (excepto objetos de stats bajo demanda).
-- **Lite mode**: `setLiteMode(true)` emite `uv:lite-mode`; el engine cambia a perfil
-  Lite en caliente sin recargar.
-- **Recursos**: `dispose()` libera programas, VAOs, buffers, texturas de estado,
-  FBOs, render targets y el contexto (`WEBGL_lose_context`). Context lost/restored
-  reconstruye el pipeline.
-
-### Métricas (headless Firefox, software WebGL)
-
-![Bench](media/bench-headless.png)
-
-| Efecto (perfil high) | Resolución | ms/frame (software) |
-|---|---:|---:|
-| Fluid Fields | 1152×648 | 3.03 ms |
-| Organic Structures | 1152×648 | 1.47 ms |
-| Mathematical Forms | 1152×648 | 8.57 ms |
-| Temporal Veil | 1152×648 | 3.25 ms |
-
-Perfiles de Fluid Fields:
-
-| Perfil | Resolución | Partículas | ms/frame (software) |
-|---|---|---:|---:|
-| Lite | 896×504 | 16 384 | 1.00 ms |
-| High | 1152×648 | 65 536 | 3.06 ms |
-| Ultra | 1280×720 | 262 144 | 10.43 ms |
-
-Medido con 60–90 frames de `update + render + post` y `gl.finish()` en Firefox headless
-sobre rasterizador **software** (clase Radeon HD 3200). En GPU real el costo es menor;
-estos números son una cota superior, no un benchmark de producción. Reproducible con
-`examples/bench.html`.
-
-![Benchmark de las cuatro familias](media/bench-all.png)
-
-## 9. Integración con la aplicación existente
-
-| Funcionalidad | Estado |
-|---|---|
-| Selector / thumbnails | ✅ `getAvailableEffects()` une p5 + GPU; thumbnail 2D propia |
-| Presets | ✅ guardan `params` del motor (compatibles con presets viejos) |
-| Auto-transición | ✅ incluye las 4 familias GPU con cross-fade |
-| Audio reactivo | ✅ bandas/RMS/beat; espectro en UI; deformación por banda en GPU |
-| Fullscreen | ✅ sin cambios |
-| Captura PNG | ✅ `captureFrame` elige el canvas visible (`preserveDrawingBuffer: true`) |
-| Compartir URL | ✅ `?effect=fluidFields` funciona |
-| Modo Lite | ✅ perfil GPU Lite en caliente |
-| Efectos p5 | ✅ intactos, mismo registro y factories |
-
-El motor es independiente de la UI: `createEngine({ container, quality })` puede usarse
-sin montar el generador. Los efectos GPU comparten contrato, post-proceso, perfiles y
-transiciones.
-
-```js
-import { createEngine } from '@kndl/umbral-vision';
-
-const engine = createEngine({
-  container: document.querySelector('#stage'),
-  effectName: 'fluidFields',
-  quality: 'high' // 'auto' | 'lite' | 'high' | 'ultra'
-});
-engine.setParameters({ speed: 1.3 });
-engine.getStats();
-engine.dispose();
-```
-
-## 10. Cómo ejecutar
-
-```bash
-npm install
-npm test            # 97 tests
-npm run lint
-npm run build
-
-# demo visual (necesita servidor por ES modules)
-npx serve .         # o python3 -m http.server
-# → http://localhost:8000/examples/fluid.html
-# → http://localhost:8000/examples/bench.html
-```
-
-## 11. Limitaciones conocidas
-
-1. **Transiciones p5↔GPU instantáneas**: el cross-fade existe solo entre efectos GPU.
-2. **Sin panel genérico de parámetros** en la UI todavía; la API y el schema están
-   listos (`getEffectSchema`) y la demo los consume.
-3. **Simulación float requerida** para Fluid Fields. Sin `EXT_color_buffer_float`/
-   half-float el efecto no arranca (error controlado). Fallback CPU no implementado.
-4. **Adaptativo basado en frame delta**, no en GPU timer query. En pantallas de 30 Hz
-   puede bajar resolución de más; no afecta corrección.
-5. **Sin TypeScript/Vite**. Se mantiene esbuild y JS+JSDoc.
-6. **Audio**: el análisis está testeado con FFT mock; la validación con micrófono real
-   requiere interacción del usuario (permiso) y no es posible en headless.
-7. **Coste de Mathematical Forms**: el ray marching depende de la resolución; el
-   perfil Lite reduce pasos. La resolución adaptativa global ayuda.
-8. **Context restore** reconstruye el efecto desde cero (la composición se reinicia).
-
-## 12. Panel de parámetros y URL
-
-La UI monta una sección `Parámetros` dinámica dentro del panel existente, usando
-`.panel-section-label`, `.panel-row` y `.btn`. Se genera desde `getEffectSchema()`:
-
-- sliders numéricos con rango/step del schema;
-- checkbox para booleanos;
-- seed con botón aleatorio;
-- botón `Reiniciar` que aplica los defaults.
-
-Los valores se guardan por efecto en el motor (`savedParams`) y se restauran al
-volver. Presets y URL los serializan; `?p={json}` restaura la configuración al cargar.
-
-## 13. Validación en la app real
-
-Ver [VALIDATION.md](VALIDATION.md): 19 efectos en el generador de `kndl000`,
-cuatro familias funcionando, cross-fade, Lite, audio, PNG y presets, sin errores de
-consola. La sincronización encontró y corrigió dos bugs (transición congelada y
-thumbnails negros).
-
-## 14. Próximos pasos (Slice 8+)
-
-1. **Transiciones p5↔GPU**: compositing de un canvas 2D y un target WebGL.
-2. **Bandas en efectos p5**: hoy usan `level`; migrarlos a features por banda.
-3. **Más variantes por familia** (atractores, túneles volumétricos, membranas celulares).
-4. **GPU timer queries** para métricas reales y adaptativo por costo de GPU.
-5. **Micrófono real**: calibración de beat/AGC por dispositivo.
-6. Evaluar **WebGPU** detrás de la misma interfaz.
