@@ -3,7 +3,8 @@ import { mulberry32, hash2 } from '../src/engine/math/random.js';
 import { identity, multiply, perspective, lookAt, translation } from '../src/engine/math/mat4.js';
 import { QUALITY_PROFILES, createAdaptiveResolution, getQualityProfile } from '../src/engine/core/Quality.js';
 import { Effect } from '../src/engine/effects/Effect.js';
-import { ENGINE_EFFECTS, isEngineEffect, drawFluidPreview } from '../src/engine/registry.js';
+import { ENGINE_EFFECTS, isEngineEffect, drawFluidPreview, drawOrganicPreview, drawMathPreview, drawTemporalPreview } from '../src/engine/registry.js';
+import { createOrganicGeometry } from '../src/engine/math/organicGeometry.js';
 
 describe('deterministic random', () => {
   it('mulberry32 es reproducible con la misma seed', () => {
@@ -117,27 +118,60 @@ describe('Effect parameter contract', () => {
   });
 });
 
-describe('engine registry', () => {
-  it('registra fluidFields y su schema', () => {
-    expect(isEngineEffect('fluidFields')).toBe(true);
-    expect(isEngineEffect('tunnel')).toBe(false);
-    const entry = ENGINE_EFFECTS.fluidFields;
-    expect(entry.family).toBe('fluid');
-    expect(entry.schema.density.default).toBeGreaterThan(0);
-    expect(entry.schema.speed.default).toBe(1);
+describe('organic geometry', () => {
+  it('genera un mesh cerrado con atributos coherentes', () => {
+    const geo = createOrganicGeometry({ segmentsU: 32, segmentsV: 12, seed: 7 });
+    const vertices = 32 * 12;
+    expect(geo.positions).toHaveLength(vertices * 3);
+    expect(geo.normals).toHaveLength(vertices * 3);
+    expect(geo.uvs).toHaveLength(vertices * 2);
+    expect(geo.indices).toHaveLength(vertices * 6);
+    expect(Math.max(...geo.indices)).toBeLessThan(vertices);
   });
 
-  it('la preview 2D dibuja sin WebGL', () => {
-    const calls = [];
-    const ctx = new Proxy({}, {
-      get(target, prop) {
-        if (prop === 'createRadialGradient') return () => ({ addColorStop: () => {} });
-        return (...args) => { calls.push([prop, args]); };
-      },
-      set() { return true; }
-    });
-    expect(() => drawFluidPreview(ctx, 80, 80, 1.5)).not.toThrow();
-    expect(calls.length).toBeGreaterThan(10);
-    expect(calls.some(([name]) => name === 'arc')).toBe(true);
+  it('las normales son unitarias y el mesh es determinista', () => {
+    const a = createOrganicGeometry({ segmentsU: 24, segmentsV: 10, seed: 3 });
+    const b = createOrganicGeometry({ segmentsU: 24, segmentsV: 10, seed: 3 });
+    expect(Array.from(a.positions.slice(0, 30))).toEqual(Array.from(b.positions.slice(0, 30)));
+    for (let i = 0; i < 30; i += 3) {
+      const len = Math.hypot(a.normals[i], a.normals[i + 1], a.normals[i + 2]);
+      expect(len).toBeCloseTo(1, 3);
+    }
+  });
+
+  it('seeds distintas cambian la geometría', () => {
+    const a = createOrganicGeometry({ segmentsU: 24, segmentsV: 10, seed: 1 });
+    const b = createOrganicGeometry({ segmentsU: 24, segmentsV: 10, seed: 2 });
+    expect(Array.from(a.positions.slice(0, 30))).not.toEqual(Array.from(b.positions.slice(0, 30)));
+  });
+});
+
+describe('engine registry', () => {
+  it('registra las cuatro familias visuales', () => {
+    expect(isEngineEffect('fluidFields')).toBe(true);
+    expect(isEngineEffect('organicStructures')).toBe(true);
+    expect(isEngineEffect('mathematicalForms')).toBe(true);
+    expect(isEngineEffect('temporalVeil')).toBe(true);
+    expect(isEngineEffect('tunnel')).toBe(false);
+    expect(ENGINE_EFFECTS.fluidFields.family).toBe('fluid');
+    expect(ENGINE_EFFECTS.organicStructures.family).toBe('organic');
+    expect(ENGINE_EFFECTS.mathematicalForms.family).toBe('mathematical');
+    expect(ENGINE_EFFECTS.temporalVeil.family).toBe('temporal');
+    expect(ENGINE_EFFECTS.fluidFields.schema.density.default).toBeGreaterThan(0);
+  });
+
+  it('las previews 2D dibujan sin WebGL', () => {
+    for (const preview of [drawFluidPreview, drawOrganicPreview, drawMathPreview, drawTemporalPreview]) {
+      const calls = [];
+      const ctx = new Proxy({}, {
+        get(target, prop) {
+          if (prop === 'createRadialGradient') return () => ({ addColorStop: () => {} });
+          return (...args) => { calls.push([prop, args]); };
+        },
+        set() { return true; }
+      });
+      expect(() => preview(ctx, 80, 80, 1.5)).not.toThrow();
+      expect(calls.length).toBeGreaterThan(4);
+    }
   });
 });

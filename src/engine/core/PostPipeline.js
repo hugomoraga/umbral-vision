@@ -7,7 +7,7 @@
 
 import { Program } from './Program.js';
 import { RenderTarget } from './RenderTarget.js';
-import { FULLSCREEN_VERT, BRIGHT_FRAG, BLUR_FRAG, COMPOSITE_FRAG, COPY_FRAG } from '../shaders/post.js';
+import { FULLSCREEN_VERT, BRIGHT_FRAG, BLUR_FRAG, COMPOSITE_FRAG, COPY_FRAG, MIX_FRAG } from '../shaders/post.js';
 
 const WEIGHTS_BY_MIPS = {
   1: [1.0, 0.0, 0.0],
@@ -31,9 +31,11 @@ export class PostPipeline {
     this.bright = new Program(gl, FULLSCREEN_VERT, BRIGHT_FRAG, 'post:bright');
     this.blur = new Program(gl, FULLSCREEN_VERT, BLUR_FRAG, 'post:blur');
     this.copy = new Program(gl, FULLSCREEN_VERT, COPY_FRAG, 'post:copy');
+    this.mix = new Program(gl, FULLSCREEN_VERT, MIX_FRAG, 'post:mix');
     this.composite = new Program(gl, FULLSCREEN_VERT, COMPOSITE_FRAG, 'post:composite');
 
     this.levels = [];
+    this.mixTarget = null;
     this.width = 0;
     this.height = 0;
     this.disposed = false;
@@ -52,6 +54,8 @@ export class PostPipeline {
       level.b.dispose();
     }
     this.levels = [];
+    if (this.mixTarget) this.mixTarget.dispose();
+    this.mixTarget = new RenderTarget(this.gl, { width, height, format: this.format });
 
     let w = Math.max(1, width >> 1);
     let h = Math.max(1, height >> 1);
@@ -71,10 +75,27 @@ export class PostPipeline {
    * @param {RenderTarget} scene
    * @param {{width:number,height:number}} output viewport del canvas
    * @param {object} params
+   * @param {RenderTarget|null} [sceneB] segunda escena para cross-fade
+   * @param {number} [mix] 0 = scene, 1 = sceneB
    */
-  render(scene, output, params = {}) {
+  render(scene, output, params = {}, sceneB = null, mix = 1) {
     const gl = this.gl;
     if (this.levels.length === 0) return;
+
+    // Cross-fade: mezcla ambas escenas antes del bloom/tonemap.
+    if (sceneB && this.mixTarget) {
+      this.mixTarget.bind();
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      this.mix.use()
+        .set('uSceneA', 0)
+        .set('uSceneB', 1)
+        .set('uMix', Math.max(0, Math.min(1, mix)));
+      this._bindTexture(scene.texture, 0);
+      this._bindTexture(sceneB.texture, 1);
+      this.quad.draw();
+      scene = this.mixTarget;
+    }
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -174,9 +195,12 @@ export class PostPipeline {
       level.b.dispose();
     }
     this.levels = [];
+    if (this.mixTarget) this.mixTarget.dispose();
+    this.mixTarget = null;
     this.bright.dispose();
     this.blur.dispose();
     this.copy.dispose();
+    this.mix.dispose();
     this.composite.dispose();
   }
 }

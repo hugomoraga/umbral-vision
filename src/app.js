@@ -62,7 +62,11 @@ const EFFECT_LABELS = {
   sacredGeometry: 'Geometría Sagrada',
   biomech: 'Biomech',
   dune: 'Duna',
-  yinYang: 'Yin Yang'
+  yinYang: 'Yin Yang',
+  fluidFields: 'Fluid Fields',
+  organicStructures: 'Organic Structures',
+  mathematicalForms: 'Mathematical Forms',
+  temporalVeil: 'Temporal Veil'
 };
 
 /**

@@ -50,6 +50,8 @@ export function createEngine(options = {}) {
   let quad = null;
   let post = null;
   let effect = null;
+  let outgoing = null;
+  let transition = null;
   let currentName = null;
   let running = false;
   let raf = 0;
@@ -58,11 +60,7 @@ export function createEngine(options = {}) {
   let lastStatsAt = 0;
   const postOverrides = {};
 
-  function buildResources(name, initialParams) {
-    if (effect) {
-      effect.dispose();
-      effect = null;
-    }
+  function createPost() {
     if (post) {
       post.dispose();
       post = null;
@@ -75,11 +73,28 @@ export function createEngine(options = {}) {
       bloomQuality: renderer.quality.bloomQuality
     });
     post.resize(renderer.width, renderer.height);
+  }
 
+  function createEffect(name, initialParams) {
+    const next = createEngineEffect(name, renderer, initialParams || params);
+    next.initialize();
+    next.onResize(renderer.width, renderer.height);
+    return next;
+  }
+
+  function buildResources(name, initialParams) {
+    if (effect) {
+      effect.dispose();
+      effect = null;
+    }
+    if (outgoing) {
+      outgoing.dispose();
+      outgoing = null;
+    }
+    transition = null;
+    createPost();
     currentName = name;
-    effect = createEngineEffect(name, renderer, initialParams || params);
-    effect.initialize();
-    effect.onResize(renderer.width, renderer.height);
+    effect = createEffect(name, initialParams);
   }
 
   function frame(now) {
@@ -112,7 +127,10 @@ export function createEngine(options = {}) {
     const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
     renderer.cpuMs = end - start;
     const resized = renderer.sampleFrame(deltaMs);
-    if (resized) effect.onResize(renderer.width, renderer.height);
+    if (resized) {
+      effect.onResize(renderer.width, renderer.height);
+      if (outgoing) outgoing.onResize(renderer.width, renderer.height);
+    }
 
     if (onStats && now - lastStatsAt > 500) {
       lastStatsAt = now;
@@ -127,13 +145,34 @@ export function createEngine(options = {}) {
    * @param {object} [audio]
    */
   function renderFrame(dt, audio = getAudioFeatures()) {
+    let mix = 1;
+
+    if (outgoing && transition) {
+      transition.elapsed += dt;
+      const raw = Math.min(1, transition.elapsed / Math.max(0.001, transition.duration));
+      mix = raw * raw * (3 - 2 * raw); // smoothstep: entrada/salida suave
+
+      outgoing.setAudioFeatures?.(audio);
+      outgoing.update(dt, audio);
+      outgoing.render(renderer);
+    }
+
     effect.setAudioFeatures?.(audio);
     effect.update(dt, audio);
     effect.render(renderer);
-    post.render(effect.getSceneTarget(), renderer.output, {
+
+    const sceneFrom = outgoing ? outgoing.getSceneTarget() : null;
+    const sceneTo = effect.getSceneTarget();
+    post.render(sceneFrom || sceneTo, renderer.output, {
       ...effect.getPostParams(),
       ...postOverrides
-    });
+    }, sceneFrom ? sceneTo : null, mix);
+
+    if (outgoing && transition && transition.elapsed >= transition.duration) {
+      outgoing.dispose();
+      outgoing = null;
+      transition = null;
+    }
   }
 
   function start() {
@@ -151,19 +190,48 @@ export function createEngine(options = {}) {
     raf = 0;
   }
 
-  function setEffect(name, nextParams) {
+  /**
+   * @param {string} name
+   * @param {Record<string, number|boolean>} [nextParams]
+   * @param {{transitionMs?:number}} [options]
+   */
+  function setEffect(name, nextParams, options = {}) {
     if (!isEngineEffect(name)) throw new Error(`Efecto GPU desconocido: ${name}`);
     if (name === currentName) {
       if (nextParams) effect.setParameters(nextParams);
       return effect;
     }
-    buildResources(name, { ...params, ...(nextParams || {}) });
+
+    const transitionMs = Math.max(0, options.transitionMs ?? 0);
+    const previous = effect;
+    const previousName = currentName;
+    const next = createEffect(name, { ...params, ...(nextParams || {}) });
+
+    if (previous && transitionMs > 0) {
+      if (outgoing) outgoing.dispose();
+      outgoing = previous;
+      transition = {
+        from: previousName,
+        to: name,
+        elapsed: 0,
+        duration: transitionMs / 1000
+      };
+    } else if (previous) {
+      previous.dispose();
+      transition = null;
+      outgoing = null;
+    }
+
+    effect = next;
+    currentName = name;
     return effect;
   }
 
   function setParameters(patch) {
     if (!effect) return [];
-    return effect.setParameters(patch);
+    const changed = effect.setParameters(patch);
+    if (outgoing) outgoing.setParameters(patch);
+    return changed;
   }
 
   function getParameters() {
@@ -191,7 +259,10 @@ export function createEngine(options = {}) {
       effect: currentName,
       particleSize: effect?.particleSize || 0,
       particleCount: effect?.particleCount || 0,
-      activeParticles: effect ? Math.floor(effect.particleCount * (effect.params.density ?? 1)) : 0,
+      activeParticles: effect?.particleCount ? Math.floor(effect.particleCount * (effect.params.density ?? 1)) : 0,
+      transitioning: !!transition,
+      transitionFrom: transition?.from || null,
+      transitionProgress: transition ? Math.round((transition.elapsed / transition.duration) * 100) / 100 : 1,
       renderer: 'webgl2'
     };
   }
@@ -231,6 +302,8 @@ export function createEngine(options = {}) {
     removeLiteListener();
     if (effect) effect.dispose();
     effect = null;
+    if (outgoing) outgoing.dispose();
+    outgoing = null;
     if (post) post.dispose();
     post = null;
     if (quad) quad.dispose();
@@ -250,6 +323,7 @@ export function createEngine(options = {}) {
     onScaleChange: (w, h) => {
       if (post) post.resize(w, h);
       if (effect) effect.onResize(w, h);
+      if (outgoing) outgoing.onResize(w, h);
     }
   });
 
@@ -283,6 +357,7 @@ export function createEngine(options = {}) {
     get renderer() { return renderer; },
     get effect() { return effect; },
     get currentEffect() { return currentName; },
+    get transitioning() { return !!transition; },
     get running() { return running; },
     get fpsCounter() { return fpsCounter; },
     start,

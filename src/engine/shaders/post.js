@@ -54,6 +54,17 @@ void main() {
 }
 `;
 
+export const MIX_FRAG = `${FRAG_HEADER}
+in vec2 vUv;
+uniform sampler2D uSceneA;
+uniform sampler2D uSceneB;
+uniform float uMix;
+out vec4 outColor;
+void main() {
+  outColor = mix(texture(uSceneA, vUv), texture(uSceneB, vUv), uMix);
+}
+`;
+
 export const COPY_FRAG = `${FRAG_HEADER}
 in vec2 vUv;
 uniform sampler2D uSource;

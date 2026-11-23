@@ -47,7 +47,7 @@ function getMainContainer() {
   return document.querySelector('#generator main') || document.body;
 }
 
-function startEngineEffect(effectName, container = null) {
+function startEngineEffect(effectName, container = null, options = {}) {
   if (!ENGINE_EFFECTS[effectName]) {
     console.warn('Efecto GPU no encontrado:', effectName);
     return;
@@ -69,7 +69,11 @@ function startEngineEffect(effectName, container = null) {
     }
     fpsCounter = engine.fpsCounter;
   } else {
-    engine.setEffect(effectName);
+    const same = engine.currentEffect === effectName;
+    const wasRunning = engine.running;
+    engine.setEffect(effectName, undefined, {
+      transitionMs: (same || !wasRunning) ? 0 : (options.transitionMs ?? 1000)
+    });
     engine.show();
     fpsCounter = engine.fpsCounter;
   }
@@ -157,7 +161,7 @@ export function startVisualizer(effectName = 'tunnel', container = null) {
  */
 export function changeEffect(effectName) {
   if (isEngineEffect(effectName)) {
-    startEngineEffect(effectName);
+    startEngineEffect(effectName, null, { transitionMs: 1000 });
     return;
   }
   if (!Effects[effectName]) {

@@ -17,10 +17,13 @@ describe('API pública v0.4', () => {
     expect(uv.ENGINE_EFFECTS).toBe(ENGINE_EFFECTS);
   });
 
-  it('getAvailableEffects une los 15 efectos p5 y fluidFields', () => {
+  it('getAvailableEffects une los 15 efectos p5 y las 4 familias GPU', () => {
     const names = uv.getAvailableEffects();
-    expect(names).toHaveLength(16);
+    expect(names).toHaveLength(19);
     expect(names).toContain('fluidFields');
+    expect(names).toContain('organicStructures');
+    expect(names).toContain('mathematicalForms');
+    expect(names).toContain('temporalVeil');
     expect(names).toContain('tunnel');
     expect(new Set(names).size).toBe(names.length);
   });
@@ -97,7 +100,7 @@ describe('thumbnails con catálogo unificado', () => {
     }
     document.body.appendChild(container);
     const thumbs = createThumbnails(container, all, () => {});
-    expect(thumbs.getNames()).toHaveLength(16);
+    expect(thumbs.getNames()).toHaveLength(19);
     const fluidButton = container.querySelector('[data-effect-name="fluidFields"]');
     expect(fluidButton).toBeTruthy();
     expect(fluidButton.getAttribute('aria-label')).toBe('Fluid Fields');

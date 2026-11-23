@@ -25,7 +25,10 @@ const LABELS = {
   biomech: 'Biomech',
   dune: 'Duna',
   yinYang: 'Yin Yang',
-  fluidFields: 'Fluid Fields'
+  fluidFields: 'Fluid Fields',
+  organicStructures: 'Organic Structures',
+  mathematicalForms: 'Mathematical Forms',
+  temporalVeil: 'Temporal Veil'
 };
 
 export function createThumbnails(container, effects, onSelect) {
