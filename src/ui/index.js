@@ -6,6 +6,7 @@
  */
 
 import { Effects } from '../Effects.js';
+import { ENGINE_EFFECTS } from '../engine/registry.js';
 import {
   startVisualizer,
   changeEffect,
@@ -14,7 +15,9 @@ import {
   stopAudio,
   getAudioState,
   startAutoTransition,
-  stopAutoTransition
+  stopAutoTransition,
+  getEffectParameters,
+  setEffectParameters
 } from '../index.js';
 import { getFrequencyData } from '../AudioReactive.js';
 
@@ -34,6 +37,18 @@ import { createFpsWidget } from '../perf/fpsCounterUI.js';
 import { getFpsCounter, getLiteMode, setLiteMode } from '../index.js';
 
 const DEFAULT_EFFECT = 'tunnel';
+
+// Catálogo unificado p5 + GPU para la UI. Los efectos GPU exponen una preview
+// 2D propia (thumbnails) y se delegan a Visualizer al seleccionarlos.
+const ENGINE_PREVIEWS = {};
+for (const [name, entry] of Object.entries(ENGINE_EFFECTS)) {
+  const factory = () => ({ draw: () => {} });
+  factory.preview = entry.preview;
+  factory.isEngine = true;
+  factory.label = entry.label;
+  ENGINE_PREVIEWS[name] = factory;
+}
+const ALL_EFFECTS = { ...Effects, ...ENGINE_PREVIEWS };
 
 export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}) {
   initToastListener();
@@ -71,13 +86,13 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
   if (panel) createPanel(panel);
 
   const thumbs = thumbnailsEl
-    ? createThumbnails(thumbnailsEl, Effects, (name) => selectEffect(name))
+    ? createThumbnails(thumbnailsEl, ALL_EFFECTS, (name) => selectEffect(name))
     : null;
 
   if (thumbs) thumbs.highlight(state.currentEffect);
 
   function selectEffect(name) {
-    if (!Effects[name]) {
+    if (!ALL_EFFECTS[name]) {
       showToast(`Efecto "${name}" no disponible, usando "${state.currentEffect}"`);
       name = state.currentEffect;
     }
@@ -85,7 +100,7 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
     state.currentEffect = name;
     if (thumbs) thumbs.highlight(name);
     if (autoCheck?.checked) {
-      startAutoTransition(state.intervalSeconds * 1000, Object.keys(Effects), selectEffect);
+      startAutoTransition(state.intervalSeconds * 1000, Object.keys(ALL_EFFECTS), selectEffect);
     }
   }
 
@@ -146,7 +161,7 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
     autoCheck.addEventListener('change', () => {
       state.autoTransitionEnabled = autoCheck.checked;
       if (state.autoTransitionEnabled) {
-        startAutoTransition(state.intervalSeconds * 1000, Object.keys(Effects), selectEffect);
+        startAutoTransition(state.intervalSeconds * 1000, Object.keys(ALL_EFFECTS), selectEffect);
       } else {
         stopAutoTransition();
       }
@@ -157,7 +172,7 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
       state.intervalSeconds = Number(intervalInput.value);
       if (intervalValue) intervalValue.textContent = `${state.intervalSeconds}s`;
       if (state.autoTransitionEnabled) {
-        startAutoTransition(state.intervalSeconds * 1000, Object.keys(Effects), selectEffect);
+        startAutoTransition(state.intervalSeconds * 1000, Object.keys(ALL_EFFECTS), selectEffect);
       }
     });
   }
@@ -217,7 +232,10 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
       state.intervalSeconds = p.state.interval || state.intervalSeconds;
       if (intervalInput) intervalInput.value = String(state.intervalSeconds);
       if (intervalValue) intervalValue.textContent = `${state.intervalSeconds}s`;
-      if (p.state.effect && Effects[p.state.effect]) selectEffect(p.state.effect);
+      if (p.state.effect && ALL_EFFECTS[p.state.effect]) selectEffect(p.state.effect);
+      if (p.state.params && typeof p.state.params === 'object') {
+        setEffectParameters(p.state.params);
+      }
       showToast(`Preset "${p.name}" cargado`);
     });
   }
@@ -228,7 +246,8 @@ export function mountUI({ onFirstFrame = () => {}, skipOnboarding = false } = {}
       const created = savePreset(name, {
         effect: state.currentEffect,
         interval: state.intervalSeconds,
-        audioEnabled: getAudioState().enabled
+        audioEnabled: getAudioState().enabled,
+        params: getEffectParameters()
       });
       if (created) {
         populatePresetSelect(presetSelect);

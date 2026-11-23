@@ -58,4 +58,7 @@ export function setLiteMode(value) {
   try {
     localStorage.setItem('umbral-vision:lite-mode', value ? 'on' : 'off');
   } catch { /* noop */ }
+  try {
+    window.dispatchEvent(new CustomEvent('uv:lite-mode', { detail: { lite: !!value } }));
+  } catch { /* noop */ }
 }

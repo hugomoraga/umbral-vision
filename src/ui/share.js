@@ -6,7 +6,9 @@
  */
 
 export function captureFrame() {
-  const canvas = document.querySelector('#generator canvas');
+  // Puede haber dos canvases (p5 2D + motor WebGL): capturamos el visible.
+  const canvases = Array.from(document.querySelectorAll('#generator canvas, main canvas, body > canvas'));
+  const canvas = canvases.find((c) => c.style.display !== 'none' && !c.hidden) || canvases[0];
   if (!canvas) return null;
   if (typeof canvas.toBlob !== 'function') return null;
   return new Promise((resolve) => {

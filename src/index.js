@@ -15,15 +15,24 @@ import {
   setVisualizerConfig,
   getVisualizerConfig,
   getFpsCounter,
-  getDeviceProfile
+  getDeviceProfile,
+  setEffectParameters,
+  getEffectParameters,
+  getEffectSchema,
+  getEngineStats,
+  setEngineQuality,
+  getEngine
 } from './Visualizer.js';
 import {
   initAudio,
   stopAudio,
   getAudioState,
   getFrequencyData,
+  getAudioFeatures,
   tickAudio
 } from './AudioReactive.js';
+import { createEngine } from './engine/UmbralEngine.js';
+import { ENGINE_EFFECTS, isEngineEffect, getEngineEffectNames } from './engine/registry.js';
 import {
   startAutoTransition,
   stopAutoTransition,
@@ -58,15 +67,23 @@ export {
   setVisualizerConfig,
   getVisualizerConfig,
   getFpsCounter,
-  getDeviceProfile
+  getDeviceProfile,
+  setEffectParameters,
+  getEffectParameters,
+  getEffectSchema,
+  getEngineStats,
+  setEngineQuality,
+  getEngine
 };
 export {
   initAudio,
   stopAudio,
   getAudioState,
   getFrequencyData,
+  getAudioFeatures,
   tickAudio
 };
+export { createEngine, ENGINE_EFFECTS, isEngineEffect, getEngineEffectNames };
 export {
   startAutoTransition,
   stopAutoTransition,
@@ -105,14 +122,27 @@ export default {
     setConfig: setVisualizerConfig,
     getConfig: getVisualizerConfig,
     getFpsCounter,
-    getDeviceProfile
+    getDeviceProfile,
+    setEffectParameters,
+    getEffectParameters,
+    getEffectSchema,
+    getEngineStats,
+    setEngineQuality,
+    getEngine
   },
   Audio: {
     init: initAudio,
     stop: stopAudio,
     getState: getAudioState,
     getFrequencyData: getFrequencyData,
+    getFeatures: getAudioFeatures,
     tick: tickAudio
+  },
+  Engine: {
+    create: createEngine,
+    effects: ENGINE_EFFECTS,
+    isEngineEffect,
+    getEffectNames: getEngineEffectNames
   },
   Transition: {
     start: startAutoTransition,

@@ -28,7 +28,9 @@ export function savePreset(name, state) {
     state: {
       effect: state.effect,
       interval: state.interval,
-      audioEnabled: !!state.audioEnabled
+      audioEnabled: !!state.audioEnabled,
+      // Parámetros del motor GPU (null/ausente en efectos p5).
+      params: state.params && typeof state.params === 'object' ? { ...state.params } : null
     },
     createdAt: new Date().toISOString()
   };

@@ -24,7 +24,8 @@ const LABELS = {
   sacredGeometry: 'Geometría Sagrada',
   biomech: 'Biomech',
   dune: 'Duna',
-  yinYang: 'Yin Yang'
+  yinYang: 'Yin Yang',
+  fluidFields: 'Fluid Fields'
 };
 
 export function createThumbnails(container, effects, onSelect) {
@@ -74,10 +75,29 @@ export function createThumbnails(container, effects, onSelect) {
   const startPreview = (name) => {
     stopPreview();
     activeName = name;
-    const { preview } = buttons.get(name);
-    if (!preview || !effects[name]) return;
+    const { preview } = buttons.get(name) || {};
+    const entry = effects[name];
+    if (!preview || !entry) return;
+
+    // Efectos GPU: preview 2D liviana provista por el registro del motor.
+    if (typeof entry.preview === 'function') {
+      const ctx = preview.getContext('2d');
+      let raf = 0;
+      const tick = (now) => {
+        if (activeName !== name) return;
+        try { entry.preview(ctx, preview.width, preview.height, now / 1000); } catch { return; }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      liveStop = () => {
+        activeName = null;
+        cancelAnimationFrame(raf);
+      };
+      return;
+    }
+
     const sk = createPreviewSketch(preview);
-    const fx = effects[name](sk);
+    const fx = entry(sk);
     let last = 0;
     const interval = 1000 / PREVIEW_FPS;
     let raf = 0;
