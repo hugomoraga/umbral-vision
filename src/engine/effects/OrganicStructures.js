@@ -102,7 +102,7 @@ export class OrganicStructures extends Effect {
     const a = p.audio > 0 && audio.enabled ? p.audio : 0;
     const bass = audio.bass * a;
     const beat = audio.beat * a;
-    const radius = 7.1 + Math.sin(t * 0.085) * 0.45 - bass * 1.3 - beat * 0.55 - audio.rms * a * 0.35;
+    const radius = 7.1 + Math.sin(t * 0.085) * 0.45 - bass * 1.0 - beat * 0.45 - audio.rms * a * 0.25;
     const angle = t * 0.09 * p.speed * (1 + bass * 1.1) + this.audioPhase + pointer.x * 0.2;
     this.eye = [
       Math.sin(angle) * radius,
@@ -152,7 +152,7 @@ export class OrganicStructures extends Effect {
       .set('uAudioRms', audio.rms * a)
       .set('uBeat', audio.beat * a)
       .set('uAudioAmount', a)
-      .set('uScale', 1 + audio.bass * a * 0.14 + audio.beat * a * 0.08 + audio.rms * a * 0.05);
+      .set('uScale', 1 + audio.bass * a * 0.10 + audio.beat * a * 0.06 + audio.rms * a * 0.04);
 
     this.mesh.draw();
 

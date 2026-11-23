@@ -109,8 +109,8 @@ void main() {
   color = mix(color, vec3(0.78, 0.89, 1.0), fresnel * 0.22 + uAudioHigh * uAudioAmount * 0.10);
 
   float bright = 0.12 + diffuse * 0.62 + backLight * 0.30 + fresnel * 1.25
-               + bands * 0.62 + uBeat * uAudioAmount * 0.9 + uAudioRms * uAudioAmount * 0.8
-               + uAudioHigh * uAudioAmount * 0.5;
+               + bands * 0.62 + uBeat * uAudioAmount * 0.55 + uAudioRms * uAudioAmount * 0.45
+               + uAudioHigh * uAudioAmount * 0.3;
   color *= bright * uGlow;
 
   float alpha = uOpacity * (0.08 + fresnel * 0.46 + bands * 0.30);
