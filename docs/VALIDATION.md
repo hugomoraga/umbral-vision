@@ -1,13 +1,14 @@
 # Validación en la aplicación real (kndl000)
 
 Fecha: 2026-11-23
-Versión validada: **0.5.2** (`7f8760d`)
+Versión validada: **0.6.0** (`5319c23`)
 
 ![Generador con Fluid Fields](media/app-generator.png)
 
 ## Entorno
 
-- `kndl000` (Jekyll 4.3.4) sirviendo `http://127.0.0.1:4000/visual/generator/`.
+- `kndl000` (Jekyll 4.3.4) sirviendo `http://127.0.0.1:4000/imaginario/generator/`
+  (`/visual/generator/` redirige a la ruta canónica `/imaginario/generator/`).
 - El submodule `assets/js/umbral-vision` se carga **directo desde `src/`** por el
   layout `_layouts/generator.html` (sin bundler ni `dist`).
 - Chromium 131 headless (Playwright) con WebGL 2 vía SwiftShader.
@@ -33,6 +34,20 @@ Versión validada: **0.5.2** (`7f8760d`)
 | Captura PNG | descarga `umbral-vision-*.png`, ~1.2 MB (canvas WebGL visible) |
 | Preset | guarda `effect=fluidFields` + 13 parámetros del schema |
 | Errores de consola / página | **0** |
+
+### Panel de parámetros (v0.6.0)
+
+| Comprobación | Resultado |
+|---|---|
+| Sección `PARÁMETROS` visible con efecto GPU | 12 sliders + seed (13 parámetros Fluid Fields) |
+| Cambio en vivo desde el slider | `speed` pasó a `1.75` en el motor |
+| Cambio a Organic y vuelta | panel con 11 sliders; `speed` de Fluid conservado en `1.75` |
+| URL con `p={...}` | restaura `speed=0.42`, `hue=0.11`, `seed=777` y los sliders |
+| Preset desde la UI | guarda `effect=fluidFields` + 13 parámetros |
+| Volver a p5 (`tunnel`) | sección oculta, 0 sliders |
+| Errores | **0** |
+
+![Panel de parámetros](media/app-params.png)
 
 ## Incidencias encontradas y corregidas
 
@@ -61,5 +76,6 @@ cd kndl000
 bundle exec jekyll serve --host 127.0.0.1 --port 4000
 
 # validación automatizada (requiere playwright + chromium)
-node /tmp/opencode/pw/validate2.mjs
+node /tmp/opencode/pw/validate2.mjs   # app + efectos
+node /tmp/opencode/pw/validate3.mjs   # panel + URL + preset
 ```
