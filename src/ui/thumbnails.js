@@ -69,7 +69,25 @@ export function createThumbnails(container, effects, onSelect) {
     btn.addEventListener('click', () => onSelect?.(name));
 
     container.appendChild(btn);
-    buttons.set(name, { btn, preview: btn.querySelector('canvas') });
+    const previewEl = btn.querySelector('canvas');
+    buttons.set(name, { btn, preview: previewEl });
+
+    // Primer frame estático: sin esto los thumbnails no seleccionados quedan
+    // en negro y parecen roto. El preview en vivo sigue siendo solo el activo.
+    if (previewEl) {
+      const entry = effects[name];
+      const ctx = previewEl.getContext('2d');
+      if (ctx && entry) {
+        try {
+          if (typeof entry.preview === 'function') {
+            entry.preview(ctx, previewEl.width, previewEl.height, 0.6);
+          } else {
+            const sk = createPreviewSketch(previewEl);
+            entry(sk).draw();
+          }
+        } catch { /* preview opcional */ }
+      }
+    }
   }
 
   let liveStop = null;
