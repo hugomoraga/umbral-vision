@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-23
+
+### Added
+- Modelo de audio físico extendido a **Fluid Fields**, **Mathematical Forms** y
+  **Temporal Veil** (Organic ya era el piloto): `AudioMotion` compartido con
+  spring-damper + fase de flujo.
+- Gains de audio por efecto en `audio-map.json → effects.<efecto>`.
+- Impulso radial de kick en la simulación de partículas de Fluid Fields.
+- Control de cámara/zoom/potencia/roll/warp/emisión por kick, body, mid y high en
+  cada familia.
+
+### Changed
+- Fluid Fields dejó de usar bandas crudas para cámara y simulación.
+- Los cuatro efectos consumen `bassBody`, `midFlow`, `highShimmer`, `kick`,
+  `kickFlash` y `rms`, con envelopes lentos y señales de fase.
+
 ## [0.8.0] - 2026-11-23
 
 ### Added

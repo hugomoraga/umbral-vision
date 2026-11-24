@@ -20,6 +20,8 @@ import { createSpriteQuad, createFullscreenQuad } from '../core/Geometry.js';
 import { UPDATE_FRAG, RENDER_VERT, RENDER_FRAG } from '../shaders/fluid.js';
 import { perspective, lookAt, multiply } from '../math/mat4.js';
 import { mulberry32 } from '../math/random.js';
+import { getAudioMap } from '../../audio/audioConfig.js';
+import { AudioMotion } from '../../audio/motion.js';
 
 const TAU = Math.PI * 2;
 
@@ -71,7 +73,8 @@ export class FluidFields extends Effect {
     this.eye = [0, 0, 4.8];
     this.lightPos = [2.2, 1.8, 2.4];
     this.lastAudio = null;
-    this.audioPhase = 0;
+    this.motion = new AudioMotion();
+    this.signals = { body: 0, mid: 0, high: 0, rms: 0, kickPos: 0, kickImpulse: 0 };
 
     if (!this.simFormat) {
       throw new Error('WebGL 2 sin soporte de render a texturas float (se requiere EXT_color_buffer_float)');
@@ -229,21 +232,30 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
     this.lastAudio = audio;
     const p = this.params;
     const a = p.audio > 0 && audio.enabled ? p.audio : 0;
-    const bass = audio.bass * a;
-    const mid = audio.mid * a;
-    const beat = audio.beat * a;
-    this.audioPhase += dt * (mid * 0.3 + beat * 0.9);
+    const map = getAudioMap();
+    const gains = map.effects?.fluidFields || {};
+    const motion = this.motion.update(dt, audio, map, 'fluidFields', a);
+
+    const body = (audio.bassBody || 0) * a * Number(gains.body ?? 1);
+    const mid = (audio.midFlow || 0) * a * Number(gains.mid ?? 1);
+    const high = (audio.highShimmer || 0) * a * Number(gains.high ?? 1);
+    const rms = (audio.rms || 0) * a;
+    const kickPos = motion.kickPos * Number(gains.kick ?? 1);
+    const kickImpulse = audio.kickTrigger ? (audio.kickStrength || 1) * Number(gains.kick ?? 1) : 0;
+    this.signals = { body, mid, high, rms, kickPos, kickImpulse };
 
     this._stepSimulation(Math.min(0.033, Math.max(0.0, dt)), audio);
 
     // Cámara: órbita lenta + parallax sutil del puntero.
     const t = this.time;
     const pointer = this.renderer.pointer || { x: 0, y: 0 };
-    const radius = 4.9 - bass * 0.65 - beat * 0.4 + Math.sin(t * 0.09) * 0.35;
-    const angle = t * 0.11 + this.audioPhase + pointer.x * 0.22;
+    const dolly = kickPos * Number(map.kick?.cameraDolly ?? 0.03) * 8;
+    const breath = body * Number(map.bassBody?.scale ?? 0.05) * 2;
+    const radius = 4.9 - dolly - breath + Math.sin(t * 0.09) * 0.35;
+    const angle = t * 0.11 + motion.flowPhase * 0.12 + pointer.x * 0.22;
     this.eye = [
       Math.sin(angle) * radius,
-      Math.sin(t * 0.07) * 1.15 + pointer.y * 0.9 + beat * 0.35,
+      Math.sin(t * 0.07) * 1.15 + pointer.y * 0.9 + kickPos * 0.3,
       Math.cos(angle) * radius
     ];
     const view = lookAt(this.eye, [0, 0, 0], [0, 1, 0]);
@@ -258,16 +270,11 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
     ];
   }
 
-  _stepSimulation(dt, audio) {
+  _stepSimulation(dt, _audio) {
     const gl = this.gl;
     const state = this.state;
     const p = this.params;
-    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
-    const bass = audio.bass * a;
-    const mid = audio.mid * a;
-    const high = audio.high * a;
-    const rms = audio.rms * a;
-    const beat = audio.beat * a;
+    const sig = this.signals;
 
     const readPos = state.read === 'a' ? state.posA : state.posB;
     const readVel = state.read === 'a' ? state.velA : state.velB;
@@ -291,12 +298,13 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
       .set('uAmplitude', p.amplitude)
       .set('uComplexity', p.complexity)
       .set('uTurbulence', p.turbulence)
-      .set('uAudioBass', bass)
-      .set('uAudioMid', mid)
-      .set('uAudioHigh', high)
-      .set('uAudioRms', rms)
-      .set('uBeat', beat)
-      .set('uAudioAmount', a);
+      .set('uAudioBass', sig.body)
+      .set('uAudioMid', sig.mid)
+      .set('uAudioHigh', sig.high)
+      .set('uAudioRms', sig.rms)
+      .set('uKick', sig.kickPos)
+      .set('uKickImpulse', sig.kickImpulse)
+      .set('uAudioAmount', 1);
 
     this._bindTexture(readPos, 0);
     this._bindTexture(readVel, 1);
@@ -319,8 +327,7 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
     const gl = this.gl;
     const p = this.params;
     const state = this.state;
-    const audio = this.lastAudio || FALLBACK_AUDIO;
-    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const sig = this.signals;
 
     const pos = state.read === 'a' ? state.posA : state.posB;
     const vel = state.read === 'a' ? state.velA : state.velB;
@@ -352,11 +359,11 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
       .set('uSaturation', p.saturation)
       .set('uStretch', renderer.quality.trailLength)
       .set('uLightPos', this.lightPos)
-      .set('uLightPower', 1.35 + (audio.rms || 0) * a * 0.8)
-      .set('uAudioHigh', audio.high * a)
-      .set('uAudioRms', audio.rms * a)
-      .set('uBeat', audio.beat * a)
-      .set('uAudioAmount', a);
+      .set('uLightPower', 1.35 + sig.rms * 0.8)
+      .set('uAudioHigh', sig.high)
+      .set('uAudioRms', sig.rms)
+      .set('uKick', sig.kickPos)
+      .set('uAudioAmount', 1);
 
     this._bindTexture(pos, 0);
     this._bindTexture(vel, 1);

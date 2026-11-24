@@ -22,9 +22,9 @@ Cuatro familias visuales con técnicas distintas:
 - Simulación GPU con texturas ping-pong (MRT) y estado determinista por seed.
 - Pipeline HDR: bright pass, bloom multi-mip, tonemap ACES, viñeta, grano y aberración.
 - **Cross-fade** entre efectos GPU antes del bloom.
-- **Audio reactivo profundo**: kick con detección de tempo y grilla 4/4, bandas
-  graves/medios/agudos con deformación distinta, volumen RMS y espectro en vivo.
-  Todos los valores viven en `src/audio/audio-map.json`.
+- **Audio reactivo profundo en las 4 familias GPU**: kick con detección de tempo y
+  grilla 4/4, bandas graves/medios/agudos con deformación distinta, volumen RMS y
+  espectro en vivo. Todos los valores viven en `src/audio/audio-map.json`.
 - **Studio UI**: panel por tabs, parámetros agrupados, presets, dock de efectos,
   transporte, modo inmersivo con auto-hide y responsive móvil.
 - Perfiles `lite` / `high` / `ultra` + resolución adaptativa.

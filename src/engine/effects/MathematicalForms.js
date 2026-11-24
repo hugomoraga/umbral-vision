@@ -11,6 +11,8 @@ import { Program } from '../core/Program.js';
 import { RenderTarget, supportsRenderFormat } from '../core/RenderTarget.js';
 import { createFullscreenQuad } from '../core/Geometry.js';
 import { MATH_VERT, MATH_FRAG } from '../shaders/mathematical.js';
+import { getAudioMap } from '../../audio/audioConfig.js';
+import { AudioMotion } from '../../audio/motion.js';
 
 export const MATH_SCHEMA = {
   speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad', group: 'Movimiento' },
@@ -59,6 +61,8 @@ export class MathematicalForms extends Effect {
     this.quad = createFullscreenQuad(this.gl);
     this.program = new Program(this.gl, MATH_VERT, MATH_FRAG, 'math:raymarch');
     this.lastAudio = FALLBACK_AUDIO;
+    this.motion = new AudioMotion();
+    this.signals = { body: 0, mid: 0, high: 0, rms: 0, kickPos: 0, kickFlash: 0 };
     this.camera = { pos: [0, 0, 3.4], right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] };
   }
 
@@ -73,10 +77,20 @@ export class MathematicalForms extends Effect {
     const t = this.time;
     const pointer = this.renderer.pointer || { x: 0, y: 0 };
     const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const map = getAudioMap();
+    const gains = map.effects?.mathematicalForms || {};
+    const motion = this.motion.update(dt, audio, map, 'mathematicalForms', a);
+    const body = (audio.bassBody || 0) * a * Number(gains.body ?? 1);
+    const midFlow = (audio.midFlow || 0) * a * Number(gains.mid ?? 1);
+    const high = (audio.highShimmer || 0) * a * Number(gains.high ?? 1);
+    const rms = (audio.rms || 0) * a;
+    const kickPos = motion.kickPos * Number(gains.kick ?? 1);
+    this.signals = { body, mid: midFlow, high, rms, kickPos, kickFlash: audio.kickFlash || 0 };
 
-    const radius = 3.35 - audio.bass * a * 1.25 - audio.beat * a * 0.55 + Math.sin(t * 0.1) * 0.16;
-    const angle = t * 0.12 * p.speed * (1 + audio.bass * a * 1.2) + pointer.x * 0.25 + (p.seed | 0) * 0.013;
-    const height = Math.sin(t * 0.09) * 1.6 + pointer.y * 0.9 + audio.mid * a * 0.5;
+    const dolly = kickPos * Number(map.kick?.cameraDolly ?? 0.03) * 8;
+    const radius = 3.35 - dolly - body * 0.5 + Math.sin(t * 0.1) * 0.16;
+    const angle = t * 0.12 * p.speed + motion.flowPhase * 0.16 + pointer.x * 0.25 + (p.seed | 0) * 0.013;
+    const height = Math.sin(t * 0.09) * 1.6 + pointer.y * 0.9 + midFlow * 0.4;
 
     const pos = [
       Math.cos(angle) * radius,
@@ -88,7 +102,7 @@ export class MathematicalForms extends Effect {
     const up0 = normalize(cross(right0, forward));
 
     // Roll reactivo: los medios y el beat inclinan la cámara.
-    const roll = audio.mid * a * 0.42 + audio.beat * a * 0.3;
+    const roll = midFlow * 0.42 + (audio.kickFlash || 0) * 0.12;
     const cr = Math.cos(roll);
     const sr = Math.sin(roll);
     const right = [
@@ -118,8 +132,7 @@ export class MathematicalForms extends Effect {
   render() {
     const gl = this.gl;
     const p = this.params;
-    const audio = this.lastAudio || FALLBACK_AUDIO;
-    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const sig = this.signals;
     const detail = this.getDetail();
 
     this.sceneTarget.bind();
@@ -145,12 +158,12 @@ export class MathematicalForms extends Effect {
       .set('uCamUp', cam.up)
       .set('uCamForward', cam.forward)
       .set('uTanHalfFov', Math.tan((48 * Math.PI) / 360))
-      .set('uAudioBass', audio.bass * a)
-      .set('uAudioMid', audio.mid * a)
-      .set('uAudioHigh', audio.high * a)
-      .set('uAudioRms', audio.rms * a)
-      .set('uBeat', audio.beat * a)
-      .set('uAudioAmount', a);
+      .set('uAudioBass', sig.body)
+      .set('uAudioMid', sig.mid)
+      .set('uAudioHigh', sig.high)
+      .set('uAudioRms', sig.rms)
+      .set('uKick', sig.kickPos)
+      .set('uAudioAmount', 1);
 
     this.quad.draw();
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);

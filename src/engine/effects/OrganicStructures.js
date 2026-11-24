@@ -15,6 +15,7 @@ import { ORGANIC_VERT, ORGANIC_FRAG } from '../shaders/organic.js';
 import { createOrganicGeometry } from '../math/organicGeometry.js';
 import { perspective, lookAt, multiply, rotationY } from '../math/mat4.js';
 import { getAudioMap } from '../../audio/audioConfig.js';
+import { AudioMotion } from '../../audio/motion.js';
 
 
 export const ORGANIC_SCHEMA = {
@@ -62,9 +63,7 @@ export class OrganicStructures extends Effect {
     this.viewProj = new Float32Array(16);
     this.eye = [0, 1.5, 7];
     this.lastAudio = FALLBACK_AUDIO;
-    this.kickPos = 0;
-    this.kickVel = 0;
-    this.flowPhase = 0;
+    this.motion = new AudioMotion();
     this._buildMesh();
   }
 
@@ -104,28 +103,16 @@ export class OrganicStructures extends Effect {
     const map = getAudioMap();
     const a = p.audio > 0 && audio.enabled ? p.audio : 0;
 
-    const body = (audio.bassBody || 0) * a;
-    const midFlow = (audio.midFlow || 0) * a;
-
-    // Impulso físico del kick: spring-damper, no valor instantáneo.
-    if (audio.kickTrigger) {
-      const depth = Number(map.kick?.depth ?? 0.7);
-      this.kickVel += (audio.kickStrength || 1) * depth * 6.0;
-    }
-    const spring = Number(map.kick?.spring ?? 18);
-    const damping = Number(map.kick?.damping ?? 4.5);
-    this.kickVel += (-spring * this.kickPos - damping * this.kickVel) * dt;
-    this.kickPos += this.kickVel * dt;
-    this.kickPos = Math.max(-1.2, Math.min(1.2, this.kickPos));
-
-    // Fase de flujo para medios: movimiento continuo, sin jitter.
-    this.flowPhase += dt * (0.18 + midFlow * Number(map.midFlow?.waveSpeed ?? 0.8) * 1.6);
+    const gains = map.effects?.organicStructures || {};
+    const body = (audio.bassBody || 0) * a * Number(gains.body ?? 1);
+    const motion = this.motion.update(dt, audio, map, 'organicStructures', a);
+    const kickPos = motion.kickPos * Number(gains.kick ?? 1);
 
     const pointer = this.renderer.pointer || { x: 0, y: 0 };
-    const dolly = this.kickPos * Number(map.kick?.cameraDolly ?? 0.03) * 8;
+    const dolly = kickPos * Number(map.kick?.cameraDolly ?? 0.03) * 8;
     const breath = body * Number(map.bassBody?.scale ?? 0.05) * 2;
     const radius = 7.1 + Math.sin(t * 0.085) * 0.45 - dolly - breath;
-    const angle = t * 0.09 * p.speed + this.flowPhase * 0.12 + pointer.x * 0.2;
+    const angle = t * 0.09 * p.speed + motion.flowPhase * 0.12 + pointer.x * 0.2;
     this.eye = [
       Math.sin(angle) * radius,
       1.35 + Math.sin(t * 0.07) * 1.1 - pointer.y * 0.8,
@@ -136,7 +123,7 @@ export class OrganicStructures extends Effect {
     const proj = perspective((52 * Math.PI) / 180, this.renderer.width / Math.max(1, this.renderer.height), 0.1, 60);
     multiply(proj, view, this.viewProj);
 
-    const spin = t * 0.055 * p.speed + this.flowPhase * 0.1 + (p.seed | 0) * 0.01;
+    const spin = t * 0.055 * p.speed + motion.flowPhase * 0.1 + (p.seed | 0) * 0.01;
     rotationY(spin, this.model);
   }
 
@@ -145,6 +132,12 @@ export class OrganicStructures extends Effect {
     const p = this.params;
     const audio = this.lastAudio || FALLBACK_AUDIO;
     const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const map = getAudioMap();
+    const gains = map.effects?.organicStructures || {};
+    const motion = this.motion;
+    const body = (audio.bassBody || 0) * a * Number(gains.body ?? 1);
+    const midFlow = (audio.midFlow || 0) * a * Number(gains.mid ?? 1);
+    const kickPos = motion.kickPos * Number(gains.kick ?? 1);
 
     this.sceneTarget.bind();
     gl.clearColor(0, 0, 0, 1);
@@ -167,16 +160,15 @@ export class OrganicStructures extends Effect {
       .set('uGlow', p.glow)
       .set('uOpacity', p.opacity)
       .set('uCamPos', this.eye)
-      .set('uKick', this.kickPos * a)
-      .set('uBody', (audio.bassBody || 0) * a)
-      .set('uMidFlow', (audio.midFlow || 0) * a)
-      .set('uHighShimmer', (audio.highShimmer || 0) * a * Number(getAudioMap().highShimmer?.porosity ?? 1))
-      .set('uFlowPhase', this.flowPhase)
-      .set('uWaveAmp', Number(getAudioMap().midFlow?.waveAmp ?? 0.12))
-      .set('uTwist', Number(getAudioMap().midFlow?.twist ?? 0.22) * Math.sin(this.flowPhase * 0.35))
-      .set('uMicroDisplace', Number(getAudioMap().highShimmer?.microDisplace ?? 0.012))
-      .set('uScale', 1 + this.kickPos * a * 0.12
-        + (audio.bassBody || 0) * a * Number(getAudioMap().bassBody?.scale ?? 0.05));
+      .set('uKick', kickPos * a)
+      .set('uBody', body)
+      .set('uMidFlow', midFlow)
+      .set('uHighShimmer', (audio.highShimmer || 0) * a * Number(gains.high ?? 1) * Number(map.highShimmer?.porosity ?? 1))
+      .set('uFlowPhase', motion.flowPhase)
+      .set('uWaveAmp', Number(map.midFlow?.waveAmp ?? 0.12))
+      .set('uTwist', Number(map.midFlow?.twist ?? 0.22) * Math.sin(motion.flowPhase * 0.35))
+      .set('uMicroDisplace', Number(map.highShimmer?.microDisplace ?? 0.012))
+      .set('uScale', 1 + kickPos * a * 0.12 + body * Number(map.bassBody?.scale ?? 0.05));
 
     this.mesh.draw();
 

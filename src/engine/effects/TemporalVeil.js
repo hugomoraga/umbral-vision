@@ -11,6 +11,8 @@ import { Program } from '../core/Program.js';
 import { RenderTarget, supportsRenderFormat } from '../core/RenderTarget.js';
 import { createFullscreenQuad } from '../core/Geometry.js';
 import { TEMPORAL_VERT, TEMPORAL_FRAG } from '../shaders/temporal.js';
+import { getAudioMap } from '../../audio/audioConfig.js';
+import { AudioMotion } from '../../audio/motion.js';
 
 export const TEMPORAL_SCHEMA = {
   speed: { type: 'number', default: 1.0, min: 0.1, max: 3.0, label: 'Velocidad', group: 'Movimiento' },
@@ -49,6 +51,8 @@ export class TemporalVeil extends Effect {
     this.quad = createFullscreenQuad(this.gl);
     this.program = new Program(this.gl, TEMPORAL_VERT, TEMPORAL_FRAG, 'temporal:feedback');
     this.lastAudio = FALLBACK_AUDIO;
+    this.motion = new AudioMotion();
+    this.signals = { body: 0, mid: 0, high: 0, rms: 0, kickPos: 0, kickFlash: 0 };
     this._clearTargets();
   }
 
@@ -70,13 +74,25 @@ export class TemporalVeil extends Effect {
     super.update(dt, audio);
     this.lastAudio = audio;
     this.dt = dt;
+    const p = this.params;
+    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const map = getAudioMap();
+    const gains = map.effects?.temporalVeil || {};
+    const motion = this.motion.update(dt, audio, map, 'temporalVeil', a);
+    this.signals = {
+      body: (audio.bassBody || 0) * a * Number(gains.body ?? 1),
+      mid: (audio.midFlow || 0) * a * Number(gains.mid ?? 1),
+      high: (audio.highShimmer || 0) * a * Number(gains.high ?? 1),
+      rms: (audio.rms || 0) * a,
+      kickPos: motion.kickPos * Number(gains.kick ?? 1),
+      kickFlash: (audio.kickFlash || 0) * Number(gains.kick ?? 1)
+    };
   }
 
   render() {
     const gl = this.gl;
     const p = this.params;
-    const audio = this.lastAudio || FALLBACK_AUDIO;
-    const a = p.audio > 0 && audio.enabled ? p.audio : 0;
+    const sig = this.signals;
 
     const read = this.targets[this.index];
     const write = this.targets[1 - this.index];
@@ -92,20 +108,20 @@ export class TemporalVeil extends Effect {
       .set('uTime', this.time)
       .set('uDt', Math.min(0.05, this.dt || 1 / 60))
       .set('uDecay', p.decay)
-      .set('uZoom', p.zoom * p.speed * (1 + audio.bass * a * 0.8))
-      .set('uRotation', p.rotation * p.speed * (1 + audio.mid * a * 0.7 + audio.beat * a * 0.4))
+      .set('uZoom', p.zoom * p.speed * (1 + sig.body * 0.7 + sig.kickPos * 0.5))
+      .set('uRotation', p.rotation * p.speed * (1 + sig.mid * 0.7 + sig.kickFlash * 0.2))
       .set('uWarp', p.warp)
-      .set('uDensity', p.density)
+      .set('uDensity', p.density * (1 + sig.body * 0.4 + sig.kickPos * 0.3))
       .set('uHue', p.hue)
       .set('uSaturation', p.saturation)
       .set('uGlow', p.glow)
       .set('uSeed', (p.seed | 0) % 1000)
-      .set('uAudioBass', audio.bass * a)
-      .set('uAudioMid', audio.mid * a)
-      .set('uAudioHigh', audio.high * a)
-      .set('uAudioRms', audio.rms * a)
-      .set('uBeat', audio.beat * a)
-      .set('uAudioAmount', a);
+      .set('uAudioBass', sig.body)
+      .set('uAudioMid', sig.mid)
+      .set('uAudioHigh', sig.high)
+      .set('uAudioRms', sig.rms)
+      .set('uKick', sig.kickPos)
+      .set('uAudioAmount', 1);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, read.texture);

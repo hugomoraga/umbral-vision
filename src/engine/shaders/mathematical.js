@@ -22,6 +22,7 @@ uniform float uWarp;
 uniform float uHue;
 uniform float uSaturation;
 uniform float uGlow;
+uniform float uKick;
 uniform float uSeed;
 uniform int uSteps;
 uniform int uIterations;
@@ -36,7 +37,6 @@ uniform float uAudioBass;
 uniform float uAudioMid;
 uniform float uAudioHigh;
 uniform float uAudioRms;
-uniform float uBeat;
 uniform float uAudioAmount;
 
 out vec4 outColor;
@@ -53,7 +53,7 @@ float mandelbulb(vec3 p) {
   vec3 z = p;
   float dr = 1.0;
   float r = 0.0;
-  float power = uPower + uAudioBass * uAudioAmount * 1.8;
+  float power = uPower + uAudioBass * uAudioAmount * 1.8 + uKick * 0.7;
 
   for (int i = 0; i < 8; i++) {
     if (i >= uIterations) break;
@@ -84,7 +84,7 @@ float map(vec3 p) {
   // Simetría rotacional + domain warp temporal.
   q.xz = rot2(uTime * 0.05 * uSpeed + uSeed) * q.xz;
   q.xy = rot2(sin(uTime * 0.07) * 0.18) * q.xy;
-  q += (uWarp + uAudioMid * uAudioAmount * 0.9 + uAudioHigh * uAudioAmount * 0.45) * 0.10 * vec3(
+  q += (uWarp + uAudioMid * uAudioAmount * 0.9 + uAudioHigh * uAudioAmount * 0.45 + uKick * 0.04) * 0.10 * vec3(
     sin(q.y * 2.1 + uTime * 0.31),
     sin(q.z * 2.3 - uTime * 0.27),
     sin(q.x * 2.5 + uTime * 0.23)
@@ -142,7 +142,7 @@ void main() {
     vec3 lightDir = normalize(vec3(0.55, 0.9, 0.45));
     float diffuse = clamp(dot(n, lightDir), 0.0, 1.0);
     float rim = pow(1.0 - clamp(abs(dot(n, -rd)), 0.0, 1.0), 2.3);
-    float pulse = 0.5 + 0.5 * sin(travel * 18.0 - uTime * 2.0 + uBeat * 6.0);
+    float pulse = 0.5 + 0.5 * sin(travel * 18.0 - uTime * 2.0 + uKick * 4.0);
     float spec = pow(clamp(dot(normalize(lightDir - rd), n), 0.0, 1.0), 42.0);
 
     // Oclusión aproximada: cavidades profundas tardan más en marchar.
@@ -157,7 +157,7 @@ void main() {
     color = base * (0.055 + diffuse * diffuse * 1.25 + rim * 1.7 + pulse * 0.12) * ao;
     color += vec3(0.72, 0.86, 1.0) * spec * 0.55;
     color += glow * 1.25;
-    color *= 1.0 + uBeat * uAudioAmount * 1.1 + uAudioRms * uAudioAmount * 0.4;
+    color *= 1.0 + uKick * 0.7 + uAudioRms * uAudioAmount * 0.4;
   } else {
     // Fondo: casi negro, con el aura volumétrica del fractal.
     color = vec3(0.0015, 0.003, 0.008) + glow * 1.05;

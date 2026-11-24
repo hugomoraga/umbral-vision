@@ -1,6 +1,6 @@
-# Umbral Vision — Generative Visual Engine (v0.8)
+# Umbral Vision — Generative Visual Engine (v0.9)
 
-Estado: **Slices 1–7 + studio UI + motor de audio con kick/tempo (v0.8)**.
+Estado: **Slices 1–7 + studio UI + motor de audio con kick/tempo (v0.9)**.
 Cuatro familias GPU: **Fluid Fields**, **Organic Structures**, **Mathematical Forms** y
 **Temporal Systems**. Los 15 efectos p5 siguen funcionando sin cambios.
 
@@ -26,6 +26,7 @@ Cuatro familias GPU: **Fluid Fields**, **Organic Structures**, **Mathematical Fo
 src/audio/
   audio-map.json           configuración de reacción musical
   audioConfig.js           fetch + merge + overrides
+  motion.js                spring-damper compartido + fase de flujo
 
 src/engine/
   UmbralEngine.js          loop, ciclo de vida, audio, métricas, calidad
@@ -231,22 +232,30 @@ Todos los valores abstractos viven en el JSON:
   "highShimmer": { "attackMs": 15, "releaseMs": 180,
                    "porosity": 0.5, "microDisplace": 0.012 },
   "volume": { "exposure": 0.2, "bloom": 0.15 },
-  "dynamics": { "autoGain": 0.6, "floor": 0.04 }
+  "dynamics": { "autoGain": 0.6, "floor": 0.04 },
+  "effects": {
+    "fluidFields": { "kick": 1, "body": 0.7, "mid": 0.9, "high": 1 },
+    "organicStructures": { "kick": 1, "body": 0.8, "mid": 1, "high": 1 },
+    "mathematicalForms": { "kick": 1, "body": 0.5, "mid": 0.8, "high": 0.8 },
+    "temporalVeil": { "kick": 1, "body": 0.6, "mid": 0.9, "high": 0.8 }
+  }
 }
 ```
 
 Prioridad: defaults embebidos → `audio-map.json` → `window.UV_AUDIO_MAP` → overrides
 de la UI en localStorage. El JSON se puede editar sin tocar código.
 
-### Organic Structures (piloto)
+### Las cuatro familias
 
-| Señal | Respuesta |
-|---|---|
-| Kick | spring físico: escala + onda radial viajera + micro-dolly + `kickFlash` en bloom |
-| Graves | respiración lenta de escala y desplazamiento |
-| Medios | torsión acumulada + onda lateral viajera (fase, no jitter) |
-| Agudos | porosidad y shimmer en fragment + micro-desplazamiento de superficie |
-| Volumen | bloom/exposición moderados |
+| Familia | Kick | Graves | Medios | Agudos |
+|---|---|---|---|---|
+| Fluid Fields | impulso radial en la simulación + dolly de cámara | velocidad/flujo lento | turbulencia del campo | tamaño/brillo/detalle de partículas |
+| Organic Structures | spring de escala + onda viajera + dolly | respiración | torsión + onda lateral | porosidad + shimmer |
+| Mathematical Forms | dolly + potencia/warp | potencia fractal | roll de cámara + warp | warp de alta frecuencia |
+| Temporal Veil | zoom del feedback + emisión | zoom/persistencia | rotación de estelas | aberración/detalle |
+
+Todas comparten `AudioMotion` (spring + fase) y los gains por efecto de
+`audio-map.json → effects.<efecto>`. Ninguna usa bandas crudas frame a frame.
 
 La UI expone sincronía, BPM auto/manual, kick, retumbe, sensibilidad, torsión,
 shimmer, volumen y dinámica, más BPM/fase/confianza en vivo.

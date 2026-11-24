@@ -1,7 +1,7 @@
 # Validación en la aplicación real (kndl000)
 
 Fecha: 2026-11-23
-Versión validada: **0.8.0**
+Versión validada: **0.9.0**
 
 ![Studio](media/studio.png)
 
@@ -48,6 +48,19 @@ Versión validada: **0.8.0**
 | Errores | **0** |
 
 ![Panel de parámetros](media/app-params.png)
+
+## Reactividad en las cuatro familias (v0.9.0)
+
+| Familia | zero | kick | body | mid | high | full |
+|---|---:|---:|---:|---:|---:|---:|
+| Fluid Fields | 146.5 | 155.1 | 147.2 | 143.8 | 232.8 | 237.1 |
+| Organic Structures | 130.8 | 140.1 | 164.7 | 134.4 | 132.4 | 170.2 |
+| Mathematical Forms | 159.5 | 168.8 | 172.7 | 162.2 | 166.7 | 182.6 |
+| Temporal Veil | 111.1 | 122.6 | 119.4 | 120.8 | 123.6 | 129.8 |
+
+Valores = brillo medio del canvas (0–765) al renderizar el mismo frame con una
+señal aislada. Las cuatro responden a kick/body/mid/high; `full` es la suma.
+Las cuatro compilation sin errores y comparten `AudioMotion`.
 
 ## Kick + tempo + config (v0.8.0)
 

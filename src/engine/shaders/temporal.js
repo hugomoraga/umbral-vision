@@ -33,7 +33,7 @@ uniform float uAudioBass;
 uniform float uAudioMid;
 uniform float uAudioHigh;
 uniform float uAudioRms;
-uniform float uBeat;
+uniform float uKick;
 uniform float uAudioAmount;
 
 out vec4 outColor;
@@ -70,10 +70,10 @@ void main() {
   float glowMask = exp(-r * 2.8) * (0.08 + uAudioRms * a * 0.25);
   vec3 hueColor = fluidColor(fract(uHue + r * 0.22 + f * 0.08 + t * 0.004), uSaturation);
   vec3 emission = hueColor * (filaments * uDensity + glowMask * 0.04) * uGlow;
-  emission *= 0.7 + uBeat * a * 1.6 + uAudioHigh * a * 0.35;
+  emission *= 0.7 + uKick * 1.25 + uAudioHigh * a * 0.35;
 
   // El frame anterior se zoom-ea, rota y distorsiona suavemente.
-  float zoom = 1.0 - uZoom * 0.0045 - uAudioBass * a * 0.009 - uBeat * a * 0.004;
+  float zoom = 1.0 - uZoom * 0.0045 - uAudioBass * a * 0.006 - uKick * a * 0.008;
   float angle = uRotation * 0.006 + sin(t * 0.07) * 0.0015;
   vec2 warped = 0.5 + rot2(angle) * (c * zoom);
   warped += uWarp * 0.0012 * vec2(

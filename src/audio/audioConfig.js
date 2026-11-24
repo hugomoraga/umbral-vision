@@ -35,7 +35,13 @@ export const DEFAULT_AUDIO_MAP = {
   midFlow: { attackMs: 120, releaseMs: 600, twist: 0.22, waveSpeed: 0.8, waveAmp: 0.12 },
   highShimmer: { attackMs: 15, releaseMs: 180, porosity: 0.5, microDisplace: 0.012 },
   volume: { exposure: 0.2, bloom: 0.15 },
-  dynamics: { autoGain: 0.6, floor: 0.04 }
+  dynamics: { autoGain: 0.6, floor: 0.04 },
+  effects: {
+    fluidFields: { kick: 1.0, body: 0.7, mid: 0.9, high: 1.0 },
+    organicStructures: { kick: 1.0, body: 0.8, mid: 1.0, high: 1.0 },
+    mathematicalForms: { kick: 1.0, body: 0.5, mid: 0.8, high: 0.8 },
+    temporalVeil: { kick: 1.0, body: 0.6, mid: 0.9, high: 0.8 }
+  }
 };
 
 const STORAGE_KEY = 'umbral-vision:audio-map';

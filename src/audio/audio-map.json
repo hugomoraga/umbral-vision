@@ -48,5 +48,31 @@
   "dynamics": {
     "autoGain": 0.6,
     "floor": 0.04
+  },
+  "effects": {
+    "fluidFields": {
+      "kick": 1.0,
+      "body": 0.7,
+      "mid": 0.9,
+      "high": 1.0
+    },
+    "organicStructures": {
+      "kick": 1.0,
+      "body": 0.8,
+      "mid": 1.0,
+      "high": 1.0
+    },
+    "mathematicalForms": {
+      "kick": 1.0,
+      "body": 0.5,
+      "mid": 0.8,
+      "high": 0.8
+    },
+    "temporalVeil": {
+      "kick": 1.0,
+      "body": 0.6,
+      "mid": 0.9,
+      "high": 0.8
+    }
   }
 }

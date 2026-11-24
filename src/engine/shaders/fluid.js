@@ -30,7 +30,8 @@ uniform float uAudioBass;
 uniform float uAudioMid;
 uniform float uAudioHigh;
 uniform float uAudioRms;
-uniform float uBeat;
+uniform float uKick;
+uniform float uKickImpulse;
 uniform float uAudioAmount;
 
 layout(location = 0) out vec4 outPos;
@@ -50,7 +51,6 @@ void main() {
   float bass = uAudioBass * uAudioAmount;
   float mid = uAudioMid * uAudioAmount;
   float high = uAudioHigh * uAudioAmount;
-  float beat = uBeat * uAudioAmount;
 
   float t = uTime;
 
@@ -83,14 +83,14 @@ void main() {
 
   vec3 accel = flow * 3.2 + delta * spring;
   // Beat: impulso radial que atraviesa la membrana.
-  accel += normalize(pos + vec3(0.0001)) * beat * 4.2;
+  accel += normalize(pos + vec3(0.0001)) * (uKickImpulse * 4.5 + uKick * 0.65);
 
   vel = vel * 0.94 + accel * uDt;
 
   float vlen = length(vel);
   if (vlen > 6.0) vel *= 6.0 / vlen;
 
-  float speedMul = uSpeed * (1.0 + bass * 1.9);
+  float speedMul = uSpeed * (1.0 + bass * 0.45);
   pos += vel * uDt * speedMul;
 
   life += uDt * (0.05 + seed * 0.025 + high * 0.03);
@@ -133,7 +133,8 @@ uniform float uLightPower;
 
 uniform float uAudioHigh;
 uniform float uAudioRms;
-uniform float uBeat;
+uniform float uKick;
+uniform float uKickImpulse;
 uniform float uAudioAmount;
 
 out vec2 vLocal;
@@ -169,7 +170,7 @@ void main() {
 
   float high = uAudioHigh * uAudioAmount;
   float rms = uAudioRms * uAudioAmount;
-  float beat = uBeat * uAudioAmount;
+  float kick = uKick * uAudioAmount;
 
   vec4 prevClip = uViewProj * vec4(pos - vel * 0.055, 1.0);
   vec2 ndc = clipPos.xy / clipPos.w;
@@ -197,7 +198,7 @@ void main() {
   float speed = length(vel);
 
   float sizePx = uPointSize * (5.0 / depth) * (0.60 + param * 0.75);
-  sizePx *= (0.75 + 0.55 * tissue) * (1.0 + high * 1.1 + rms * 0.5);
+  sizePx *= (0.75 + 0.55 * tissue) * (1.0 + high * 0.45 + rms * 0.3 + kick * 0.2);
   sizePx = max(sizePx, 0.9);
 
   float stretch = 1.0 + uStretch * (0.12 + 0.30 * tissue) + min(motionLen, 0.30) * uStretch * 12.0;
@@ -219,7 +220,7 @@ void main() {
   float lightDist = length(pos - uLightPos);
   float light = uLightPower / (0.55 + lightDist * lightDist * 0.75);
   vColor *= 0.62 + clamp(light, 0.0, 1.8) * 0.9;
-  vColor *= 1.0 + beat * 0.7;
+  vColor *= 1.0 + kick * 0.55 + rms * 0.15;
 
   float fadeIn = smoothstep(0.0, 0.06, life);
   float fadeOut = 1.0 - smoothstep(0.74, 1.0, life);
