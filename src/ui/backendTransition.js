@@ -88,23 +88,31 @@ export function createBackendCrossfade(options = {}) {
     || (typeof setTimeout === 'function' ? setTimeout : (cb) => cb());
 
   let done = false;
+  let started = false;
+
+  function applyTarget() {
+    if (started) return;
+    started = true;
+    if (type === 'zoom') {
+      canvas.style.transform = 'scale(1.08)';
+      canvas.style.opacity = '0';
+    } else if (type === 'wipe') {
+      canvas.style.clipPath = 'inset(0 0 0 100%)';
+    } else {
+      canvas.style.opacity = '0';
+    }
+  }
+
   return {
     canvas,
     finish() {
       if (done) return;
       done = true;
-      // Dos frames: aseguramos que el backend nuevo ya pintó debajo.
-      raf(() => raf(() => {
-        if (type === 'zoom') {
-          canvas.style.transform = 'scale(1.08)';
-          canvas.style.opacity = '0';
-        } else if (type === 'wipe') {
-          canvas.style.clipPath = 'inset(0 0 0 100%)';
-        } else {
-          canvas.style.opacity = '0';
-        }
-      }));
-      later(() => removeNode(canvas), durationMs + 120);
+      // Dos frames para que el backend nuevo pinte debajo. El timeout es un
+      // fallback para tabs en background, donde rAF puede quedar pausado.
+      raf(() => raf(applyTarget));
+      later(applyTarget, 80);
+      later(() => removeNode(canvas), durationMs + 160);
     },
     cancel() {
       if (done) return;
