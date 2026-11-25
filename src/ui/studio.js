@@ -451,6 +451,7 @@ export function mountStudioUI() {
     const hidden = immersive || panel.classList.contains('is-hidden');
     try { panel.inert = hidden; } catch { /* noop */ }
     panel.setAttribute('aria-hidden', String(hidden));
+    document.body.classList.toggle('uv-panel-open', !hidden);
   }
 
   function setPanelOpen(open) {
@@ -893,6 +894,7 @@ export function mountStudioUI() {
   refreshEffectMeta();
   refreshSceneControls();
   openTab('params');
+  syncPanelInert();
   if (!new URLSearchParams(window.location.search).has('nointro')) {
     initOnboarding({
       onFirstFrame: (cb) => requestAnimationFrame(() => requestAnimationFrame(cb))

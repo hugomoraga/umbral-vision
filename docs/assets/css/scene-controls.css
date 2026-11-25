@@ -200,3 +200,49 @@
   .uv-scene-history { max-height: 140px; }
   .uv-scene-row > span { flex-basis: 54px; }
 }
+
+/* Layout responsive: el panel abierto no debe tapar el transporte. */
+@media (max-width: 1320px) and (min-width: 1181px) {
+  body.uv-panel-open .uv-transport {
+    left: calc((100vw - 376px) / 2);
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 961px) {
+  body.uv-panel-open .uv-transport {
+    left: calc((100vw - 366px) / 2);
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 960px) and (min-width: 721px) {
+  body.uv-panel-open .uv-transport {
+    left: 12px;
+    right: calc(320px + 28px);
+    bottom: 172px;
+    transform: none;
+    transition: none;
+    justify-content: space-evenly;
+    gap: 8px;
+  }
+  body.uv-panel-open .uv-audio { padding-right: 8px; gap: 6px; }
+  body.uv-panel-open #audio-spectrum { width: 92px; }
+  body.uv-panel-open .uv-mic-copy { display: none; }
+  body.uv-panel-open .uv-playback { gap: 3px; }
+}
+
+@media (max-width: 720px) {
+  body.uv-panel-open .uv-transport {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* En pantallas bajas, deja aire entre panel/transporte y el dock. */
+@media (max-height: 640px) and (min-width: 961px) {
+  .uv-panel { bottom: 168px; }
+  .uv-transport { bottom: 168px; }
+}
