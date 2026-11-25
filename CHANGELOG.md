@@ -61,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `lite` aplicado en caliente, micrófono con fake device habilitando el pipeline
   de audio, y fallback p5 cuando WebGL 2 no está disponible.
 
+### Fixed
+- Layout responsive del Studio: el transporte se reposiciona cuando el panel
+  está abierto (721–1320 px) y mantiene un gap sobre el dock en alturas
+  ≤ 640 px. El panel ya no tapa el transporte ni el borde del dock.
+
 ### Changed
 - Los presets migran de `{effect, interval, audioEnabled, params}` a un genoma
   v2 idempotente; `saveScene`/`promoteScene` conservan la seed y la variante.
