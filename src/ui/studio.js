@@ -34,6 +34,7 @@ import { createEffectParams } from './effectParams.js';
 import { createAudioControls } from './audioControls.js';
 import { createSpectrum } from './spectrum.js';
 import { getPresets, getPresetScenes, savePreset, saveScene, deletePreset } from './presets.js';
+import { exportPack, importPack, serializePack } from '../scene/packs.js';
 import { createSceneControls } from './sceneControls.js';
 import { createHistory } from '../scene/history.js';
 import { createThumbnailStore } from '../scene/storage.js';
@@ -100,6 +101,7 @@ const META = {
 
 const INTERVAL_KEY = 'umbral-vision:transition-interval';
 const MODE_KEY = 'umbral-vision:playback-mode';
+const TRANSITION_KEY = 'umbral-vision:transition-type';
 
 function buildRegistry() {
   const previews = {};
@@ -138,9 +140,12 @@ export function mountStudioUI() {
   const shareParams = parseShareURL(window.location.search);
   const initial = ALL[shareParams.effect] ? shareParams.effect : 'fluidFields';
 
+  let storedTransition = 'auto';
+  try { storedTransition = localStorage.getItem(TRANSITION_KEY) || 'auto'; } catch { /* noop */ }
   const state = {
     current: initial,
     interval: shareParams.interval || Number(localStorage.getItem(INTERVAL_KEY)) || 10,
+    transitionType: storedTransition,
     auto: false,
     paused: false
   };
@@ -308,9 +313,15 @@ export function mountStudioUI() {
       scene: safeScene(),
       mode: playlist.mode,
       history: history.list(),
+      transitionType: state.transitionType,
       familyId: sceneFamilyId(safeScene()),
       variantId: safeScene()?.variant
     }),
+    onTransitionChange: (type) => {
+      state.transitionType = type;
+      try { localStorage.setItem(TRANSITION_KEY, type); } catch { /* noop */ }
+      showToast(type === 'auto' ? 'Transiciones automáticas' : `Transición: ${type}`);
+    },
     onSelect: ({ familyId, variantId }) => {
       const resolved = resolveVariant(familyId, variantId);
       if (!resolved) return;
@@ -396,6 +407,7 @@ export function mountStudioUI() {
       scene,
       mode: playlist.mode,
       history: history.list(),
+      transitionType: state.transitionType,
       familyId: sceneFamilyId(scene),
       variantId: scene?.variant
     });
@@ -412,10 +424,12 @@ export function mountStudioUI() {
       showToast('WebGL 2 no disponible en este navegador');
       return null;
     }
-    const applied = setScene(scene, {
-      transitionMs: options.transitionMs ?? 'auto',
-      transitionType: 'dissolve'
-    });
+    const transitionOptions = {};
+    if (options.transitionMs != null) transitionOptions.transitionMs = options.transitionMs;
+    const overrideType = options.transitionType
+      || (state.transitionType !== 'auto' ? state.transitionType : null);
+    if (overrideType) transitionOptions.transitionType = overrideType;
+    const applied = setScene(scene, transitionOptions);
     if (!applied) return null;
     state.current = applied.effect;
     if (thumbs) thumbs.highlight(applied.effect);
@@ -511,7 +525,9 @@ export function mountStudioUI() {
       showToast('WebGL 2 no disponible en este navegador');
       return;
     }
-    changeEffect(name);
+    changeEffect(name, state.transitionType !== 'auto'
+      ? { transitionType: state.transitionType }
+      : undefined);
     state.current = name;
     if (thumbs) thumbs.highlight(name);
     refreshEffectMeta();
@@ -676,6 +692,68 @@ export function mountStudioUI() {
     setPanelOpen(true);
     openTab('presets');
     presetName?.focus();
+  });
+
+  // ---- packs: exportar / importar repertorio -----------------------------
+  const packTools = document.createElement('div');
+  packTools.className = 'uv-preset-pack';
+  const exportPackBtn = document.createElement('button');
+  exportPackBtn.type = 'button';
+  exportPackBtn.className = 'uv-btn uv-btn-quiet';
+  exportPackBtn.id = 'uv-pack-export';
+  exportPackBtn.textContent = 'Exportar pack';
+  const importPackBtn = document.createElement('button');
+  importPackBtn.type = 'button';
+  importPackBtn.className = 'uv-btn uv-btn-quiet';
+  importPackBtn.id = 'uv-pack-import';
+  importPackBtn.textContent = 'Importar pack';
+  const importFile = document.createElement('input');
+  importFile.type = 'file';
+  importFile.accept = 'application/json';
+  importFile.hidden = true;
+  importFile.id = 'uv-pack-file';
+  packTools.append(exportPackBtn, importPackBtn, importFile);
+  if (presetList?.parentNode) presetList.parentNode.insertBefore(packTools, presetList);
+
+  exportPackBtn.addEventListener('click', () => {
+    const scenes = getPresetScenes();
+    if (scenes.length === 0) {
+      showToast('Todavía no hay escenas para exportar');
+      return;
+    }
+    const pack = exportPack(scenes, { name: 'Umbral Vision' });
+    const blob = new Blob([serializePack(pack)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.href = url;
+    a.download = `umbral-vision-pack-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`Pack exportado (${scenes.length} escenas)`);
+  });
+
+  importPackBtn.addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files && importFile.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const result = importPack(text, getPresetScenes().map((scene) => scene.id));
+      result.scenes.forEach((scene, index) => {
+        saveScene(scene.name || `Importada ${index + 1}`, scene);
+      });
+      refreshPresetSources();
+      renderPresets();
+      showToast(`Pack: ${result.added} agregadas · ${result.skipped} omitidas · ${result.failed} fallidas`);
+    } catch (error) {
+      console.error('No se pudo importar el pack:', error);
+      showToast('No se pudo importar el pack');
+    } finally {
+      importFile.value = '';
+    }
   });
 
   function renderPresets() {

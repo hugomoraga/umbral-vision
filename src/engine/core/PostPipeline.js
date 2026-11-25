@@ -7,6 +7,7 @@
 
 import { Program } from './Program.js';
 import { RenderTarget } from './RenderTarget.js';
+import { transitionMode } from '../../scene/transitionDirector.js';
 import { FULLSCREEN_VERT, BRIGHT_FRAG, BLUR_FRAG, COMPOSITE_FRAG, COPY_FRAG, MIX_FRAG, FEEDBACK_FRAG } from '../shaders/post.js';
 
 const WEIGHTS_BY_MIPS = {
@@ -111,7 +112,9 @@ export class PostPipeline {
         .set('uSceneA', 0)
         .set('uSceneB', 1)
         .set('uMix', Math.max(0, Math.min(1, mix)))
-        .set('uMode', params.transitionType === 'luma' ? 1 : 0);
+        .set('uMode', transitionMode(params.transitionType || 'dissolve'))
+        .set('uDirection', params.transitionDirection || [1, 0])
+        .set('uSeed', Number(params.transitionSeed) || 0);
       this._bindTexture(scene.texture, 0);
       this._bindTexture(sceneB.texture, 1);
       this.quad.draw();

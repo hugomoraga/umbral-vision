@@ -336,8 +336,25 @@ próximo compás/frase (`quantizeDelay`). `createSceneScheduler()` agenda los
 cambios sin `setInterval` fijo: consulta BPM/fase y cae al intervalo de
 respaldo si no hay audio confiable.
 
-Las transiciones GPU aceptan duración `auto` (1.5–4 s) y tipo `dissolve` o
-`luma`. El pase de feedback global conserva memoria visual entre escenas.
+El cambio de escena pasa por `src/scene/transitionDirector.js`, que elige
+**tipo, duración, easing y dirección** según la familia de origen/destino, el
+backend y la energía musical:
+
+- Tipos: `dissolve`, `luma`, `zoom`, `wipe`, `feedback`.
+- Duraciones variables (~0.9–3.8 s); un kick o mucha energía acorta la transición.
+- Evita repetir el último tipo cuando hay alternativas.
+- En GPU la mezcla se resuelve en el shader de `PostPipeline`; `zoom` acerca A
+  mientras B aterriza, `wipe` barre con borde suave y ruido, y `feedback` empuja
+  el buffer global.
+- Cambiar de variante dentro de la misma familia GPU también hace cross-fade:
+  el engine recrea el efecto con el nuevo estado y mantiene la instancia
+  anterior como saliente.
+- Entre p5 ↔ GPU, y también p5 ↔ p5, se congela el canvas visible en un overlay
+  2D (`src/ui/backendTransition.js`) que se desvanece/zoomea/barre sobre el nuevo
+  backend. Nunca hay un corte seco.
+
+La UI expone un selector **Transición**: `Auto` o un tipo fijo. En la pestaña
+Presets también se pueden **exportar/importar packs** JSON de escenas.
 
 ### Memoria de escenas
 

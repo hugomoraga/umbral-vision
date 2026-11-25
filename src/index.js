@@ -67,6 +67,15 @@ import {
 } from './scene/families.js';
 import { sampleScene, mutateScene, crossoverScenes, sampleMany, validateSample } from './scene/sampler.js';
 import { createPlaylist, createSceneScheduler, quantizeDelay, PLAYBACK_MODES } from './scene/playlist.js';
+import {
+  TRANSITION_TYPES,
+  TRANSITION_LABELS,
+  TRANSITION_EASINGS,
+  chooseTransition,
+  easeTransition,
+  transitionMode,
+  cssEasing
+} from './scene/transitionDirector.js';
 import { createHistory } from './scene/history.js';
 import { createThumbnailStore } from './scene/storage.js';
 import { exportPack, importPack, parsePack, serializePack } from './scene/packs.js';
@@ -171,6 +180,13 @@ export {
   createSceneScheduler,
   quantizeDelay,
   PLAYBACK_MODES,
+  TRANSITION_TYPES,
+  TRANSITION_LABELS,
+  TRANSITION_EASINGS,
+  chooseTransition,
+  easeTransition,
+  transitionMode,
+  cssEasing,
   createHistory,
   createThumbnailStore,
   exportPack,

@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Variantes de Fluid Fields**: `torus` y `ribbon`, además de `membrane`.
 - **Controles de escena** en la Studio UI: familia/variante, modo, generar,
   mutar, guardar e historial.
+- **TransitionDirector** (`src/scene/transitionDirector.js`): elige tipo
+  (`dissolve`, `luma`, `zoom`, `wipe`, `feedback`), duración, easing y dirección
+  según familias, backend y energía musical; evita repetir el último tipo.
+- **Transiciones reales en `PostPipeline`**: zoom-through, barrido direccional
+  con ruido y mezcla por luminancia, además del feedback boost.
+- **Cross-fade unificado p5 ↔ GPU y p5 ↔ p5** con overlay 2D del canvas visible
+  (`src/ui/backendTransition.js`); las variantes GPU también hacen cross-fade.
+- **Selector de transición** (Auto / Disolver / Luz / Zoom / Barrido / Feedback)
+  y **export/import de packs** de escenas en la pestaña Presets.
 
 ### Verified
 - Benchmark GPU con Chrome headless + SwiftShader (software), Fluid Fields:

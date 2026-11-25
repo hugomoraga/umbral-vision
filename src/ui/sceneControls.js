@@ -6,6 +6,7 @@
 
 import { FAMILIES, listFamilies, resolveVariant, getFamilyForEffect } from '../scene/families.js';
 import { PLAYBACK_MODES } from '../scene/playlist.js';
+import { TRANSITION_TYPES, TRANSITION_LABELS } from '../scene/transitionDirector.js';
 import { createIcon } from './icons.js';
 
 const MODE_LABELS = {
@@ -24,9 +25,11 @@ function el(tag, className, text) {
 /**
  * @param {HTMLElement} root
  * @param {{
- *   getState?:()=>{scene?:object, mode?:string, history?:object[], familyId?:string, variantId?:string},
+ *   getState?:()=>{scene?:object, mode?:string, history?:object[], familyId?:string,
+ *                  variantId?:string, transitionType?:string},
  *   onSelect?:(selection:{familyId:string, variantId:string, effect:string})=>void,
  *   onModeChange?:(mode:string)=>void,
+ *   onTransitionChange?:(type:string)=>void,
  *   onGenerate?:()=>void,
  *   onMutate?:()=>void,
  *   onSave?:()=>void,
@@ -86,6 +89,21 @@ export function createSceneControls(root, options = {}) {
   variantSelect.id = 'uv-variant-select';
   variantRow.append(variantSelect);
   root.append(variantRow);
+
+  const transitionRow = el('label', 'uv-scene-row');
+  transitionRow.append(el('span', null, 'Transición'));
+  const transitionSelect = el('select', 'uv-select');
+  transitionSelect.id = 'uv-transition-type';
+  const autoTransition = el('option', null, 'Auto');
+  autoTransition.value = 'auto';
+  transitionSelect.append(autoTransition);
+  for (const type of TRANSITION_TYPES) {
+    const option = el('option', null, TRANSITION_LABELS[type] || type);
+    option.value = type;
+    transitionSelect.append(option);
+  }
+  transitionRow.append(transitionSelect);
+  root.append(transitionRow);
 
   const actions = el('div', 'uv-scene-actions');
   const generateBtn = el('button', 'uv-btn', 'Generar');
@@ -180,6 +198,7 @@ export function createSceneControls(root, options = {}) {
     state = next || {};
     const scene = state.scene || null;
     if (state.mode && PLAYBACK_MODES.includes(state.mode)) modeSelect.value = state.mode;
+    transitionSelect.value = state.transitionType || 'auto';
     let familyId = state.familyId
       || (scene ? getFamilyForEffect(scene.effect) : null)
       || familySelect.value
@@ -204,6 +223,7 @@ export function createSceneControls(root, options = {}) {
     options.onSelect?.(currentSelection());
   });
   variantSelect.addEventListener('change', () => options.onSelect?.(currentSelection()));
+  transitionSelect.addEventListener('change', () => options.onTransitionChange?.(transitionSelect.value));
   generateBtn.addEventListener('click', () => options.onGenerate?.());
   mutateBtn.addEventListener('click', () => options.onMutate?.());
   saveBtn.addEventListener('click', () => options.onSave?.());
@@ -218,7 +238,10 @@ export function createSceneControls(root, options = {}) {
     renderHistory,
     getSelection: currentSelection,
     get elements() {
-      return { root, modeSelect, familySelect, variantSelect, generateBtn, mutateBtn, saveBtn, status, historyList, classicBadge };
+      return {
+        root, modeSelect, familySelect, variantSelect, transitionSelect,
+        generateBtn, mutateBtn, saveBtn, status, historyList, classicBadge
+      };
     },
     destroy() {
       root.replaceChildren();

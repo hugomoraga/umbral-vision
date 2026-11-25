@@ -63,6 +63,21 @@ describe('scene controls', () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
+  it('permite elegir el tipo de transición', () => {
+    const root = makeRoot();
+    const onTransitionChange = vi.fn();
+    const controls = createSceneControls(root, {
+      getState: () => ({ scene: createScene({ effect: 'fluidFields', variant: 'membrane' }), transitionType: 'zoom' }),
+      onTransitionChange
+    });
+    const { transitionSelect } = controls.elements;
+    expect(transitionSelect.value).toBe('zoom');
+    expect(transitionSelect.options.length).toBe(6);
+    transitionSelect.value = 'wipe';
+    transitionSelect.dispatchEvent(new Event('change'));
+    expect(onTransitionChange).toHaveBeenCalledWith('wipe');
+  });
+
   it('cambia de modo y avisa', () => {
     const root = makeRoot();
     const onModeChange = vi.fn();

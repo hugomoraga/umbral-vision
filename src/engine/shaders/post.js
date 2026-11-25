@@ -55,11 +55,14 @@ void main() {
 `;
 
 export const MIX_FRAG = `${FRAG_HEADER}
+${HASH}
 in vec2 vUv;
 uniform sampler2D uSceneA;
 uniform sampler2D uSceneB;
 uniform float uMix;
 uniform int uMode;
+uniform vec2 uDirection;
+uniform float uSeed;
 out vec4 outColor;
 
 float lumaOf(vec3 c) {
@@ -67,17 +70,45 @@ float lumaOf(vec3 c) {
 }
 
 void main() {
-  vec3 a = texture(uSceneA, vUv).rgb;
-  vec3 b = texture(uSceneB, vUv).rgb;
+  vec2 uvA = vUv;
+  vec2 uvB = vUv;
+  vec3 a;
+  vec3 b;
   float m = clamp(uMix, 0.0, 1.0);
+
+  if (uMode == 2) {
+    // Zoom-through: A se acerca mientras B aterriza desde un zoom mayor.
+    vec2 c = vUv - 0.5;
+    float za = 1.0 + 0.22 * m;
+    float zb = 1.22 - 0.22 * m;
+    uvA = clamp(0.5 + c / za, vec2(0.0), vec2(1.0));
+    uvB = clamp(0.5 + c / zb, vec2(0.0), vec2(1.0));
+    a = texture(uSceneA, uvA).rgb;
+    b = texture(uSceneB, uvB).rgb;
+    m = smoothstep(0.0, 1.0, m);
+  } else {
+    a = texture(uSceneA, uvA).rgb;
+    b = texture(uSceneB, uvB).rgb;
+  }
+
   if (uMode == 1) {
     // Mezcla ponderada por luminancia: evita el doble expuesto plano.
     float la = lumaOf(a);
     float lb = lumaOf(b);
     m = clamp(m + (lb - la) * 0.12, 0.0, 1.0);
+    m = smoothstep(0.0, 1.0, m);
+  } else if (uMode == 3) {
+    // Barrido direccional con borde suave y ruido para que no parezca un corte.
+    vec2 dir = normalize(uDirection + vec2(0.0001));
+    float edge = dot(vUv - 0.5, dir) + 0.5;
+    float noise = (hash12(vUv * vec2(17.0, 13.0) + uSeed) - 0.5) * 0.06;
+    float p = mix(-0.15, 1.15, m);
+    m = 1.0 - smoothstep(p - 0.12, p + 0.12, edge + noise);
+  } else if (uMode == 0) {
+    m = smoothstep(0.0, 1.0, m);
   }
-  m = smoothstep(0.0, 1.0, m);
-  outColor = vec4(mix(a, b, m), 1.0);
+
+  outColor = vec4(mix(a, b, clamp(m, 0.0, 1.0)), 1.0);
 }
 `;
 

@@ -161,6 +161,20 @@
   line-height: 1.5;
 }
 
+/* Export/import de packs en la pestaña Presets */
+.uv-preset-pack {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.uv-preset-pack .uv-btn {
+  flex: 1;
+  justify-content: center;
+  font-size: 10px;
+  padding: 6px 8px;
+}
+
 /* Clásicos en el dock */
 .thumb.is-classic {
   opacity: 0.82;

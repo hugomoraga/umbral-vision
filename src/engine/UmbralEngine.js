@@ -25,6 +25,7 @@ import {
   getVariantForEffectParam,
   getVariantParamForEffect
 } from '../scene/families.js';
+import { easeTransition, transitionFeedbackBoost } from '../scene/transitionDirector.js';
 
 const DEFAULT_EFFECT = 'fluidFields';
 
@@ -168,7 +169,7 @@ export function createEngine(options = {}) {
     if (outgoing && transition) {
       transition.elapsed += dt;
       const raw = Math.min(1, transition.elapsed / Math.max(0.001, transition.duration));
-      mix = raw * raw * (3 - 2 * raw); // smoothstep: entrada/salida suave
+      mix = easeTransition(transition.easing || 'smooth', raw);
 
       outgoing.setAudioFeatures?.(audio);
       outgoing.update(dt, audio);
@@ -203,16 +204,19 @@ export function createEngine(options = {}) {
       feedbackWarp: Math.max(0, (basePost.feedbackWarp ?? fb.warp ?? 0.5)
         + (audio.highFast || 0) * Number(fb.highWarp ?? 0.25) * audioAmount)
     };
-    if (transition?.type === 'feedback-smear') {
-      audioPost.feedback = clamp01(audioPost.feedback + 0.18);
-      audioPost.feedbackDecay = Math.min(0.985, audioPost.feedbackDecay + 0.025);
-      audioPost.feedbackZoom = Math.max(0, audioPost.feedbackZoom + 0.35);
+    const boost = transitionFeedbackBoost(transition?.type);
+    if (boost) {
+      audioPost.feedback = clamp01(audioPost.feedback + boost.amount);
+      audioPost.feedbackDecay = Math.min(0.985, audioPost.feedbackDecay + boost.decay);
+      audioPost.feedbackZoom = Math.max(0, audioPost.feedbackZoom + boost.zoom);
     }
     post.render(sceneFrom || sceneTo, renderer.output, {
       ...basePost,
       ...audioPost,
       ...postOverrides,
       transitionType: transition?.type || 'dissolve',
+      transitionDirection: transition?.direction || [1, 0],
+      transitionSeed: transition?.seed || 0,
       transitionProgress: mix
     }, sceneFrom ? sceneTo : null, mix);
 
@@ -264,7 +268,8 @@ export function createEngine(options = {}) {
   /**
    * @param {string} name
    * @param {Record<string, number|boolean>} [nextParams]
-   * @param {{transitionMs?:number, transitionType?:string, scene?:object}} [options]
+   * @param {{transitionMs?:number, transitionType?:string, transitionEasing?:string,
+   *          transitionDirection?:number[], transitionSeed?:number, scene?:object}} [options]
    */
   function setEffect(name, nextParams, options = {}) {
     if (!isEngineEffect(name)) throw new Error(`Efecto GPU desconocido: ${name}`);
@@ -295,7 +300,10 @@ export function createEngine(options = {}) {
         to: name,
         elapsed: 0,
         duration: transitionMs / 1000,
-        type: options.transitionType || 'dissolve'
+        type: options.transitionType || 'dissolve',
+        easing: options.transitionEasing || 'smooth',
+        direction: options.transitionDirection || [1, 0],
+        seed: options.transitionSeed || 0
       };
     } else if (previous) {
       previous.dispose();
@@ -322,7 +330,37 @@ export function createEngine(options = {}) {
       throw new Error(`La escena usa un efecto no-GPU: ${s.effect}`);
     }
     const variantParam = getVariantParamForEffect(s.effect, s.variant);
-    setEffect(s.effect, { ...sceneToEffectParams(s), variant: variantParam }, {
+    const nextParams = { ...sceneToEffectParams(s), variant: variantParam };
+    const transitionMs = transitionMsFrom(options.transitionMs ?? 0);
+
+    // Cambio de variante/escena dentro de la misma familia GPU: recreamos el
+    // efecto con el nuevo estado y hacemos cross-fade con la instancia anterior.
+    if (s.effect === currentName && effect && transitionMs > 0) {
+      savedParams[currentName] = effect.getParameters();
+      const previous = effect;
+      const next = createEffect(s.effect, {
+        ...params,
+        ...(savedParams[s.effect] || {}),
+        ...nextParams
+      });
+      if (outgoing) outgoing.dispose();
+      outgoing = previous;
+      transition = {
+        from: currentName,
+        to: s.effect,
+        elapsed: 0,
+        duration: transitionMs / 1000,
+        type: options.transitionType || 'dissolve',
+        easing: options.transitionEasing || 'smooth',
+        direction: options.transitionDirection || [1, 0],
+        seed: options.transitionSeed || 0
+      };
+      effect = next;
+      currentScene = createScene({ ...s, effect: s.effect, variant: s.variant, seed: s.seed });
+      return currentScene;
+    }
+
+    setEffect(s.effect, nextParams, {
       ...options,
       scene: s
     });
@@ -376,6 +414,7 @@ export function createEngine(options = {}) {
       activeParticles: effect?.particleCount ? Math.floor(effect.particleCount * (effect.params.density ?? 1)) : 0,
       transitioning: !!transition,
       transitionFrom: transition?.from || null,
+      transitionType: transition?.type || null,
       transitionProgress: transition ? Math.round((transition.elapsed / transition.duration) * 100) / 100 : 1,
       renderer: 'webgl2'
     };

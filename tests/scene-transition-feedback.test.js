@@ -25,9 +25,13 @@ describe('transition duration', () => {
 });
 
 describe('post shaders', () => {
-  it('el mix soporta modo luma', () => {
+  it('el mix soporta luma, zoom y wipe', () => {
     expect(MIX_FRAG).toContain('uMode');
     expect(MIX_FRAG).toContain('lumaOf');
+    expect(MIX_FRAG).toContain('uDirection');
+    expect(MIX_FRAG).toContain('uSeed');
+    expect(MIX_FRAG).toContain('0.22 * m');
+    expect(MIX_FRAG).toContain('smoothstep(p - 0.12, p + 0.12');
   });
 
   it('el feedback tiene zoom, rotación, warp, decay y clamp', () => {

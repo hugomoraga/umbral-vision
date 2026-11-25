@@ -271,7 +271,7 @@
         alert('Esa escena usa WebGL 2, que no está disponible en este navegador. Probá una familia p5.');
         return null;
       }
-      const applied = setScene(scene, { transitionMs: 'auto', transitionType: 'dissolve' });
+      const applied = setScene(scene, { transitionMs: 'auto' });
       if (!applied) return null;
       if (record) history.push(applied);
       refresh();
