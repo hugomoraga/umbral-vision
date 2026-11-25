@@ -26,7 +26,8 @@
     "lint": "eslint src/ tests/",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepack": "npm run lint && npm test && npm run build"
+    "prepack": "npm run lint && npm test && npm run build",
+    "build:site": "node esbuild.site.mjs"
   },
   "peerDependencies": {
     "p5": "^1.0.0 || ^2.0.0"

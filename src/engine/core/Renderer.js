@@ -53,15 +53,14 @@ export class Renderer {
     });
 
     if (!gl) {
+      // No dejar un canvas huérfano tapando el fallback (p5 u otro backend).
+      if (this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
       throw new Error('WebGL 2 no está disponible en este navegador');
     }
     this.gl = gl;
 
     // Extensiones necesarias para HDR / simulación en float.
-    this.extFloat = gl.getExtension('EXT_color_buffer_float');
-    this.extHalfFloat = gl.getExtension('EXT_color_buffer_half_float');
-    this.extFloatLinear = gl.getExtension('OES_texture_float_linear');
-    gl.getExtension('OES_texture_half_float_linear');
+    this.refreshExtensions();
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
@@ -78,6 +77,20 @@ export class Renderer {
 
     this._lastFrameTime = 0;
     this.resize();
+  }
+
+  /**
+   * Re-adquiere las extensiones del contexto. WebGL invalida los objetos de
+   * extensión al perder/restaurar el contexto, así que hay que volver a pedirlos
+   * antes de reconstruir texturas y programas.
+   */
+  refreshExtensions() {
+    const gl = this.gl;
+    if (!gl) return;
+    this.extFloat = gl.getExtension('EXT_color_buffer_float');
+    this.extHalfFloat = gl.getExtension('EXT_color_buffer_half_float');
+    this.extFloatLinear = gl.getExtension('OES_texture_float_linear');
+    gl.getExtension('OES_texture_half_float_linear');
   }
 
   get width() {

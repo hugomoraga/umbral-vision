@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Umbral Vision — Benchmark de escenas</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #04060c; color: #dfe9ff; font-family: ui-sans-serif, system-ui, sans-serif; }
+    #stage { position: fixed; inset: 0; }
+    #hud {
+      position: fixed; top: 16px; left: 16px; width: 380px;
+      padding: 14px 16px; border: 1px solid rgba(120,180,255,.18);
+      border-radius: 14px; background: rgba(5,10,22,.86);
+      backdrop-filter: blur(12px); font-size: 12px; z-index: 10;
+    }
+    h1 { margin: 0 0 4px; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: #9fc7ff; }
+    p { margin: 0 0 10px; color: rgba(223,233,255,.5); font-size: 11px; }
+    pre { margin: 0; white-space: pre-wrap; font-size: 11px; line-height: 1.55; color: #cfe3ff; }
+    .warn { color: #ffd79a; }
+  </style>
+</head>
+<body>
+  <main id="stage"></main>
+  <aside id="hud">
+    <h1>Benchmark de escenas</h1>
+    <p id="status">Midiendo…</p>
+    <pre id="out">—</pre>
+  </aside>
+
+  <script type="module">
+    import {
+      startVisualizer,
+      getEngine,
+      getEngineStats,
+      setEngineQuality,
+      sampleScene,
+      mutateScene
+    } from '../src/index.js';
+
+    const params = new URLSearchParams(location.search);
+    const quality = ['lite', 'high', 'ultra'].includes(params.get('quality')) ? params.get('quality') : 'high';
+    const feedback = params.get('feedback') !== '0' ? 1 : 0;
+    const effect = params.get('effect') || 'fluidFields';
+    const seconds = Math.max(2, Math.min(20, Number(params.get('seconds')) || 6));
+    const stage = document.getElementById('stage');
+    const status = document.getElementById('status');
+    const out = document.getElementById('out');
+
+    function r2(v) { return Math.round(Number(v || 0) * 100) / 100; }
+
+    function sampleBenchmark() {
+      const t0 = performance.now();
+      const scenes = [];
+      for (let i = 0; i < 1000; i++) scenes.push(sampleScene({ familyId: 'fluidFields', seed: i }));
+      const t1 = performance.now();
+      for (let i = 0; i < 500; i++) mutateScene(scenes[i], { seed: 10000 + i, genes: ['hue', 'amplitude'] });
+      const t2 = performance.now();
+      return {
+        samples: 1000,
+        samplesMs: r2(t1 - t0),
+        mutations: 500,
+        mutationsMs: r2(t2 - t1)
+      };
+    }
+
+    const sampler = sampleBenchmark();
+    startVisualizer(effect, stage);
+    const engine = getEngine();
+    const webgl = !!engine;
+
+    if (!webgl) {
+      status.className = 'warn';
+      status.textContent = 'WebGL 2 no disponible: solo se mide el sampler en CPU.';
+      const result = { webgl: false, effect, quality, feedback, sampler };
+      window.__BENCH_RESULT__ = result;
+      out.textContent = JSON.stringify(result, null, 2);
+    } else {
+      setEngineQuality(quality);
+      engine.setPostParams({ feedback: feedback ? 0.25 : 0 });
+      status.textContent = `Calentando ${effect} · ${quality} · feedback ${feedback ? 'on' : 'off'}…`;
+
+      setTimeout(() => {
+        const samples = [];
+        const started = performance.now();
+        const timer = setInterval(() => {
+          const s = getEngineStats();
+          if (s) {
+            samples.push({
+              fps: s.fps,
+              frameMs: s.frameMs,
+              cpuMs: s.cpuMs,
+              width: s.width,
+              height: s.height
+            });
+          }
+          if (performance.now() - started >= seconds * 1000) {
+            clearInterval(timer);
+            const avg = (key) => samples.reduce((sum, item) => sum + Number(item[key] || 0), 0) / Math.max(1, samples.length);
+            const result = {
+              webgl: true,
+              effect,
+              quality,
+              feedback: !!feedback,
+              seconds,
+              frames: samples.length,
+              fpsAvg: r2(avg('fps')),
+              frameMsAvg: r2(avg('frameMs')),
+              cpuMsAvg: r2(avg('cpuMs')),
+              resolution: samples[0] ? `${samples[0].width}x${samples[0].height}` : '—',
+              sampler
+            };
+            window.__BENCH_RESULT__ = result;
+            status.textContent = 'Listo.';
+            out.textContent = JSON.stringify(result, null, 2);
+          }
+        }, 250);
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

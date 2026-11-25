@@ -41,14 +41,21 @@ export function createThumbnails(container, effects, onSelect, options = {}) {
     : available.sort();
   const liteMode = isLiteRecommended();
   const buttons = new Map();
+  const classicNames = new Set(options.classicNames || []);
 
   for (const name of names) {
     const btn = document.createElement('button');
-    btn.className = 'thumb';
+    btn.className = `thumb${classicNames.has(name) ? ' is-classic' : ''}`;
     btn.type = 'button';
     btn.setAttribute('aria-label', labels[name] || name);
     btn.setAttribute('aria-pressed', 'false');
     btn.dataset.effectName = name;
+    if (classicNames.has(name)) {
+      const badge = document.createElement('span');
+      badge.className = 'thumb-classic-badge';
+      badge.textContent = 'Clásico';
+      btn.appendChild(badge);
+    }
 
     const key = KEY_MAP[buttons.size];
     if (key) {

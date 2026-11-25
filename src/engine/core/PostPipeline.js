@@ -7,7 +7,7 @@
 
 import { Program } from './Program.js';
 import { RenderTarget } from './RenderTarget.js';
-import { FULLSCREEN_VERT, BRIGHT_FRAG, BLUR_FRAG, COMPOSITE_FRAG, COPY_FRAG, MIX_FRAG } from '../shaders/post.js';
+import { FULLSCREEN_VERT, BRIGHT_FRAG, BLUR_FRAG, COMPOSITE_FRAG, COPY_FRAG, MIX_FRAG, FEEDBACK_FRAG } from '../shaders/post.js';
 
 const WEIGHTS_BY_MIPS = {
   1: [1.0, 0.0, 0.0],
@@ -32,10 +32,13 @@ export class PostPipeline {
     this.blur = new Program(gl, FULLSCREEN_VERT, BLUR_FRAG, 'post:blur');
     this.copy = new Program(gl, FULLSCREEN_VERT, COPY_FRAG, 'post:copy');
     this.mix = new Program(gl, FULLSCREEN_VERT, MIX_FRAG, 'post:mix');
+    this.feedback = new Program(gl, FULLSCREEN_VERT, FEEDBACK_FRAG, 'post:feedback');
     this.composite = new Program(gl, FULLSCREEN_VERT, COMPOSITE_FRAG, 'post:composite');
 
     this.levels = [];
     this.mixTarget = null;
+    this.feedbackTargets = [];
+    this.feedbackIndex = 0;
     this.width = 0;
     this.height = 0;
     this.disposed = false;
@@ -56,6 +59,23 @@ export class PostPipeline {
     this.levels = [];
     if (this.mixTarget) this.mixTarget.dispose();
     this.mixTarget = new RenderTarget(this.gl, { width, height, format: this.format });
+    for (const target of this.feedbackTargets) target.dispose();
+    // El feedback corre a media resolución: el bloom posterior lo suaviza y
+    // el costo por píxel de cada pase se reduce ~4×.
+    const fbWidth = Math.max(1, width >> 1);
+    const fbHeight = Math.max(1, height >> 1);
+    this.feedbackTargets = [
+      new RenderTarget(this.gl, { width: fbWidth, height: fbHeight, format: this.format }),
+      new RenderTarget(this.gl, { width: fbWidth, height: fbHeight, format: this.format })
+    ];
+    this.feedbackIndex = 0;
+    const gl = this.gl;
+    for (const target of this.feedbackTargets) {
+      target.bind();
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     let w = Math.max(1, width >> 1);
     let h = Math.max(1, height >> 1);
@@ -90,11 +110,37 @@ export class PostPipeline {
       this.mix.use()
         .set('uSceneA', 0)
         .set('uSceneB', 1)
-        .set('uMix', Math.max(0, Math.min(1, mix)));
+        .set('uMix', Math.max(0, Math.min(1, mix)))
+        .set('uMode', params.transitionType === 'luma' ? 1 : 0);
       this._bindTexture(scene.texture, 0);
       this._bindTexture(sceneB.texture, 1);
       this.quad.draw();
       scene = this.mixTarget;
+    }
+
+    // Feedback global: la memoria visual sobrevive al cambio de escena.
+    const feedbackAmount = Math.max(0, Math.min(1, Number(params.feedback ?? 0)));
+    if (feedbackAmount > 0 && this.feedbackTargets.length === 2) {
+      const previous = this.feedbackTargets[this.feedbackIndex];
+      const write = this.feedbackTargets[1 - this.feedbackIndex];
+      write.bind();
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      this.feedback.use()
+        .set('uScene', 0)
+        .set('uPrev', 1)
+        .set('uResolution', [write.width, write.height])
+        .set('uTime', params.time ?? 0)
+        .set('uFeedback', feedbackAmount)
+        .set('uDecay', Math.max(0.5, Math.min(0.999, Number(params.feedbackDecay ?? 0.92))))
+        .set('uZoom', Number(params.feedbackZoom ?? 0.5))
+        .set('uRotation', Number(params.feedbackRotation ?? 0.3))
+        .set('uWarp', Number(params.feedbackWarp ?? 0.5));
+      this._bindTexture(scene.texture, 0);
+      this._bindTexture(previous.texture, 1);
+      this.quad.draw();
+      scene = write;
+      this.feedbackIndex = 1 - this.feedbackIndex;
     }
 
     gl.disable(gl.DEPTH_TEST);
@@ -197,10 +243,13 @@ export class PostPipeline {
     this.levels = [];
     if (this.mixTarget) this.mixTarget.dispose();
     this.mixTarget = null;
+    for (const target of this.feedbackTargets) target.dispose();
+    this.feedbackTargets = [];
     this.bright.dispose();
     this.blur.dispose();
     this.copy.dispose();
     this.mix.dispose();
+    this.feedback.dispose();
     this.composite.dispose();
   }
 }

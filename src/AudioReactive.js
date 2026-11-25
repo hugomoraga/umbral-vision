@@ -19,13 +19,17 @@ let analyser = null;
 let microphone = null;
 let audioStream = null;
 let dataArray = null;
+let timeArray = null;
 let prevSpectrum = null;
+let prevWaveRms = 0;
 let audioEnabled = false;
 
 const FFT_SIZE = 2048;
 const ANALYSER_SMOOTHING = 0.35;
 const ATTACK_TAU = 0.045;
 const RELEASE_TAU = 0.22;
+const FAST_ATTACK_TAU = 0.012;
+const FAST_RELEASE_TAU = 0.09;
 const LEVEL_ATTACK_TAU = 0.035;
 const LEVEL_RELEASE_TAU = 0.16;
 const BEAT_HISTORY = 30;
@@ -50,6 +54,17 @@ const features = {
   bassBody: 0,
   midFlow: 0,
   highShimmer: 0,
+  bassFast: 0,
+  midFast: 0,
+  highFast: 0,
+  bassSlow: 0,
+  midSlow: 0,
+  highSlow: 0,
+  waveRms: 0,
+  transient: 0,
+  bassOnset: false,
+  midOnset: false,
+  highOnset: false,
   kick: 0,
   kickFlash: 0,
   kickTrigger: false,
@@ -65,6 +80,8 @@ const features = {
 };
 
 let gainPeak = 0.12;
+const gainPeaks = { bass: 0.12, mid: 0.12, high: 0.12 };
+const bandFluxAvg = { bass: 0.001, mid: 0.001, high: 0.001 };
 let audioClock = 0;
 
 const fluxHistory = new Float32Array(BEAT_HISTORY);
@@ -78,6 +95,7 @@ let kickFluxIndex = 0;
 let kickFluxFilled = 0;
 
 let lastOnsetAt = -10;
+const lastBandOnsetAt = { bass: -10, mid: -10, high: -10 };
 let lastOnsetStrength = 0;
 let prevKickEnergy = 0;
 let lastVisualKickAt = -10;
@@ -170,14 +188,36 @@ function autoGain(rawMax, dt, map) {
   return Math.max(gainPeak * (1 - auto * 0.35), floor);
 }
 
+/**
+ * Ganancia automática independiente por banda. Evita que un grave muy fuerte
+ * aplaste la respuesta de medios y agudos.
+ */
+function autoGainBand(key, rawMax, dt, map) {
+  const decayRate = Number(map.agc?.decay ?? 0.996);
+  const decay = Math.pow(decayRate, Math.max(0, dt) * 60);
+  gainPeaks[key] = Math.max(rawMax, gainPeaks[key] * decay);
+  const auto = clamp(Number(map.agc?.autoGain ?? map.dynamics?.autoGain ?? 0.6), 0, 1);
+  const floor = Math.max(0.008, Number(map.agc?.floor ?? map.dynamics?.floor ?? 0.03));
+  return Math.max(gainPeaks[key] * (1 - auto * 0.35), floor);
+}
+
 function resetFeatures() {
   features.enabled = false;
   for (const key of Object.keys(features)) {
     if (key === 'syncMode') features[key] = 'grid';
-    else if (key === 'kickTrigger' || key === 'kickOnset' || key === 'enabled') features[key] = false;
-    else features[key] = 0;
+    else if (key === 'kickTrigger' || key === 'kickOnset' || key === 'enabled' || key.endsWith('Onset')) {
+      features[key] = false;
+    } else features[key] = 0;
   }
   gainPeak = 0.12;
+  gainPeaks.bass = 0.12;
+  gainPeaks.mid = 0.12;
+  gainPeaks.high = 0.12;
+  bandFluxAvg.bass = 0.001;
+  bandFluxAvg.mid = 0.001;
+  bandFluxAvg.high = 0.001;
+  prevWaveRms = 0;
+  if (timeArray) timeArray.fill(128);
   audioClock = 0;
   fluxIndex = 0;
   fluxFilled = 0;
@@ -188,6 +228,9 @@ function resetFeatures() {
   kickFluxFilled = 0;
   kickFluxHistory.fill(0);
   lastOnsetAt = -10;
+  lastBandOnsetAt.bass = -10;
+  lastBandOnsetAt.mid = -10;
+  lastBandOnsetAt.high = -10;
   lastOnsetStrength = 0;
   prevKickEnergy = 0;
   lastVisualKickAt = -10;
@@ -285,16 +328,38 @@ function analyze(dt) {
     lastMode = features.syncMode;
   }
 
-  // Bandas normalizadas con una ganancia global.
-  const gain = autoGain(Math.max(raw.bass, raw.mid, raw.high), dt, map);
-  const nbass = Math.min(1.5, raw.bass / gain);
-  const nmid = Math.min(1.5, raw.mid / gain);
-  const nhigh = Math.min(1.5, raw.high / gain);
+  // Bandas normalizadas con ganancia independiente por banda.
+  const n = dataArray.length;
+  const hzPerBin = sampleRate / fftSize;
+  const rangeOf = (from, to) => [
+    Math.max(1, Math.floor(from / hzPerBin)),
+    Math.min(n - 1, Math.ceil(to / hzPerBin))
+  ];
+  const bassRange = rangeOf(BANDS.bass[0], BANDS.bass[1]);
+  const midRange = rangeOf(BANDS.mid[0], BANDS.mid[1]);
+  const highRange = rangeOf(BANDS.high[0], BANDS.high[1]);
+
+  const gainBass = autoGainBand('bass', raw.bass, dt, map);
+  const gainMid = autoGainBand('mid', raw.mid, dt, map);
+  const gainHigh = autoGainBand('high', raw.high, dt, map);
+  // Mezcla la normalización por banda con una referencia global: conserva la
+  // respuesta independiente sin aplanar la relación entre bandas.
+  const globalGain = autoGain(Math.max(raw.bass, raw.mid, raw.high), dt, map);
+  const blendBand = (value, gainBand) => Math.min(1.5,
+    (value / gainBand) * 0.7 + (value / globalGain) * 0.3);
+  const nbass = blendBand(raw.bass, gainBass);
+  const nmid = blendBand(raw.mid, gainMid);
+  const nhigh = blendBand(raw.high, gainHigh);
 
   features.rms = smooth(features.rms, Math.min(1.5, raw.rms * 2.6), dt, LEVEL_ATTACK_TAU, LEVEL_RELEASE_TAU);
   features.bass = smooth(features.bass, nbass, dt);
   features.mid = smooth(features.mid, nmid, dt);
   features.high = smooth(features.high, nhigh, dt);
+
+  // Señales rápidas: el golpe, sin las envolventes lentas.
+  features.bassFast = smooth(features.bassFast, nbass, dt, FAST_ATTACK_TAU, FAST_RELEASE_TAU);
+  features.midFast = smooth(features.midFast, nmid, dt, FAST_ATTACK_TAU, FAST_RELEASE_TAU);
+  features.highFast = smooth(features.highFast, nhigh, dt, FAST_ATTACK_TAU, FAST_RELEASE_TAU);
 
   // Envolventes lentas para gestos (no para tiritar).
   features.bassBody = smooth(features.bassBody, nbass, dt,
@@ -303,18 +368,40 @@ function analyze(dt) {
     tauFromMs(map.midFlow?.attackMs, 0.08), tauFromMs(map.midFlow?.releaseMs, 0.5));
   features.highShimmer = smooth(features.highShimmer, nhigh, dt,
     tauFromMs(map.highShimmer?.attackMs, 0.02), tauFromMs(map.highShimmer?.releaseMs, 0.18));
+  features.bassSlow = features.bassBody;
+  features.midSlow = features.midFlow;
+  features.highSlow = features.highShimmer;
+
+  // Forma de onda: energía temporal y transiente.
+  let waveRms = 0;
+  let wavePeak = 0;
+  if (timeArray && timeArray.length) {
+    let sum = 0;
+    for (let i = 0; i < timeArray.length; i++) {
+      const v = (timeArray[i] - 128) / 128;
+      sum += v * v;
+      const abs = Math.abs(v);
+      if (abs > wavePeak) wavePeak = abs;
+    }
+    waveRms = Math.sqrt(sum / timeArray.length);
+  }
+  const waveRise = Math.max(0, waveRms - prevWaveRms);
+  prevWaveRms = waveRms;
+  features.waveRms = smooth(features.waveRms, Math.min(1, waveRms * 3.5), dt, 0.02, 0.12);
+  features.transient = smooth(features.transient, Math.min(1, waveRise * 18 + wavePeak * 0.08), dt, 0.01, 0.1);
 
   features.energy = features.bass * 0.55 + features.mid * 0.3 + features.high * 0.15;
   features.level = Math.min(1, features.rms * 1.15 + features.energy * 0.22);
 
-  // --- spectral flux global y de la banda de kick ---
+  // --- spectral flux global, por banda y de la banda de kick ---
   let flux = 0;
   let kickFlux = 0;
   let kickEnergy = 0;
-  const n = dataArray.length;
+  let bassFlux = 0;
+  let midFlux = 0;
+  let highFlux = 0;
   const lowA = Number(map.kick?.rangeHz?.[0] ?? 35);
   const lowB = Number(map.kick?.rangeHz?.[1] ?? 120);
-  const hzPerBin = sampleRate / fftSize;
   const lowStart = Math.max(1, Math.floor(lowA / hzPerBin));
   const lowEnd = Math.min(n - 1, Math.ceil(lowB / hzPerBin));
 
@@ -324,12 +411,35 @@ function analyze(dt) {
       if (delta > 0) {
         flux += delta;
         if (i >= lowStart && i <= lowEnd) kickFlux += delta;
+        if (i >= bassRange[0] && i <= bassRange[1]) bassFlux += delta;
+        else if (i >= midRange[0] && i <= midRange[1]) midFlux += delta;
+        else if (i >= highRange[0] && i <= highRange[1]) highFlux += delta;
       }
       prevSpectrum[i] = dataArray[i];
     }
   } else {
     prevSpectrum = new Float32Array(n);
     for (let i = 0; i < n; i++) prevSpectrum[i] = dataArray[i];
+  }
+
+  // Onsets por banda con promedio móvil y refractario independiente.
+  const bandOnsetThreshold = Math.max(1.25, Number(map.agc?.onsetThreshold ?? 1.6));
+  const bandMinFlux = Math.max(0.0005, Number(map.agc?.onsetMinFlux ?? 0.0015));
+  const bandRefractory = Math.max(0.06, Number(map.agc?.refractoryMs ?? 140) / 1000);
+  const bandFluxValues = {
+    bass: (bassFlux / Math.max(1, bassRange[1] - bassRange[0] + 1) / 255) * 5.5,
+    mid: (midFlux / Math.max(1, midRange[1] - midRange[0] + 1) / 255) * 4.2,
+    high: (highFlux / Math.max(1, highRange[1] - highRange[0] + 1) / 255) * 4.8
+  };
+  for (const key of ['bass', 'mid', 'high']) {
+    const value = bandFluxValues[key];
+    const avg = bandFluxAvg[key];
+    const fired = value > avg * bandOnsetThreshold
+      && value > bandMinFlux
+      && audioClock - lastBandOnsetAt[key] > bandRefractory;
+    features[`${key}Onset`] = fired;
+    if (fired) lastBandOnsetAt[key] = audioClock;
+    bandFluxAvg[key] = avg * 0.92 + value * 0.08;
   }
 
   for (let i = lowStart; i <= lowEnd; i++) kickEnergy += dataArray[i];
@@ -486,7 +596,9 @@ export async function initAudio() {
   analyser.fftSize = FFT_SIZE;
   analyser.smoothingTimeConstant = ANALYSER_SMOOTHING;
   dataArray = new Uint8Array(analyser.frequencyBinCount);
+  timeArray = new Uint8Array(analyser.fftSize || FFT_SIZE);
   prevSpectrum = null;
+  prevWaveRms = 0;
 
   microphone = audioContext.createMediaStreamSource(stream);
   microphone.connect(analyser);
@@ -503,6 +615,9 @@ export function tickAudio(dt = 1 / 60) {
   }
   try {
     analyser.getByteFrequencyData(dataArray);
+    if (timeArray && typeof analyser.getByteTimeDomainData === 'function') {
+      analyser.getByteTimeDomainData(timeArray);
+    }
     analyze(Math.min(0.1, Math.max(0.001, dt)));
   } catch {
     resetFeatures();
@@ -529,7 +644,9 @@ export async function stopAudio() {
   }
   audioContext = null;
   dataArray = null;
+  timeArray = null;
   prevSpectrum = null;
+  prevWaveRms = 0;
   resetFeatures();
 }
 
@@ -549,4 +666,8 @@ export function getAudioFeatures() {
 
 export function getFrequencyData() {
   return dataArray;
+}
+
+export function getWaveformData() {
+  return timeArray;
 }

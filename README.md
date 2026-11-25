@@ -8,6 +8,19 @@ Framework modular para generación de visuales psicodélicos en tiempo real con 
 
 ![Studio](https://raw.githubusercontent.com/hugomoraga/umbral-vision/main/docs/media/studio.png)
 
+## Studio online
+
+La Studio UI del host KNDL está publicada en GitHub Pages:
+
+**https://hugomoraga.github.io/umbral-vision/**
+
+El sitio vive en `docs/` (layout + CSS del host + bundle de la UI actual). Para
+regenerar el bundle después de tocar `src/`:
+
+```bash
+npm run build:site
+```
+
 ## Motor GPU (v0.4)
 
 Cuatro familias visuales con técnicas distintas:
@@ -25,6 +38,10 @@ Cuatro familias visuales con técnicas distintas:
 - **Audio reactivo profundo en las 4 familias GPU**: kick con detección de tempo y
   grilla 4/4, bandas graves/medios/agudos con deformación distinta, volumen RMS y
   espectro en vivo. Todos los valores viven en `src/audio/audio-map.json`.
+- **Escenas y familias (v0.10)**: 7 familias visuales + **Clásicos**, variantes
+  estructurales, genoma reproducible por seed, generación/mutación con linaje,
+  playlist híbrida cuantizada al beat e historial de escenas con captura
+  retroactiva. Los presets viejos migran sin pérdida.
 - **Studio UI**: panel por tabs, parámetros agrupados, presets, dock de efectos,
   transporte, modo inmersivo con auto-hide y responsive móvil.
 - Perfiles `lite` / `high` / `ultra` + resolución adaptativa.

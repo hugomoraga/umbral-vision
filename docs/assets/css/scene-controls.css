@@ -1,0 +1,188 @@
+/* Scene system — familias, variantes, generación e historial.
+ * Se mantiene separado de generator.css para no alterar el CSS del host.
+ */
+
+.uv-scene-controls {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--uv-border);
+}
+
+.uv-scene-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--uv-mono);
+  font-size: var(--uv-fs-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--uv-muted);
+}
+
+.uv-badge {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-family: var(--uv-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  background: rgba(255, 190, 90, 0.12);
+  border: 1px solid rgba(255, 190, 90, 0.35);
+  color: #ffd79a;
+}
+
+.uv-scene-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.uv-scene-row > span {
+  flex: 0 0 62px;
+  color: var(--uv-muted);
+  font-size: var(--uv-fs-small);
+}
+
+.uv-select {
+  flex: 1;
+  min-width: 0;
+  height: 29px;
+  padding: 0 8px;
+  border: 1px solid var(--uv-border);
+  border-radius: var(--uv-r-control);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--uv-text);
+  font-family: var(--uv-sans);
+  font-size: var(--uv-fs-small);
+  outline: none;
+}
+
+.uv-select:hover {
+  border-color: var(--uv-border-strong);
+}
+
+.uv-select:focus-visible {
+  border-color: var(--uv-accent-line);
+}
+
+.uv-select option {
+  background: var(--uv-surface-solid);
+  color: var(--uv-text);
+}
+
+.uv-scene-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.uv-scene-status {
+  margin: 0;
+  color: var(--uv-faint);
+  font-family: var(--uv-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.uv-scene-history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 2px;
+  color: var(--uv-muted);
+  font-family: var(--uv-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.uv-scene-history-count {
+  color: var(--uv-faint);
+}
+
+.uv-scene-history {
+  display: grid;
+  gap: 4px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.uv-scene-history-row {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.uv-scene-history-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--uv-text);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid transparent;
+  border-radius: var(--uv-r-control);
+}
+
+.uv-scene-history-open:hover {
+  border-color: var(--uv-border);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.uv-scene-history-open b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--uv-fs-small);
+  font-weight: 500;
+}
+
+.uv-scene-history-open span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--uv-faint);
+  font-family: var(--uv-mono);
+  font-size: 8.5px;
+}
+
+.uv-scene-empty {
+  margin: 0;
+  color: var(--uv-faint);
+  font-size: var(--uv-fs-small);
+  line-height: 1.5;
+}
+
+/* Clásicos en el dock */
+.thumb.is-classic {
+  opacity: 0.82;
+}
+
+.thumb-classic-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 190, 90, 0.14);
+  border: 1px solid rgba(255, 190, 90, 0.3);
+  color: #ffd79a;
+  font-family: var(--uv-mono);
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .uv-scene-history { max-height: 140px; }
+  .uv-scene-row > span { flex-basis: 54px; }
+}

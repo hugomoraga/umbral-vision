@@ -9,6 +9,8 @@ import { Effects } from './Effects.js';
 import {
   startVisualizer,
   changeEffect,
+  setScene,
+  getScene,
   getCurrentEffect,
   getAvailableEffects,
   stopVisualizer,
@@ -30,11 +32,44 @@ import {
   stopAudio,
   getAudioState,
   getFrequencyData,
+  getWaveformData,
   getAudioFeatures,
   tickAudio
 } from './AudioReactive.js';
 import { createEngine } from './engine/UmbralEngine.js';
 import { loadAudioMap, getAudioMap, setAudioOverride, resetAudioOverrides } from './audio/audioConfig.js';
+import {
+  SCENE_SCHEMA_VERSION,
+  createScene,
+  migrateScene,
+  validateScene,
+  serializeScene,
+  deserializeScene,
+  legacyStateToScene,
+  sceneToLegacyState,
+  encodeSceneCompact,
+  decodeSceneCompact,
+  sceneFingerprint,
+  randomSeed
+} from './scene/Scene.js';
+import {
+  FAMILIES,
+  FAMILY_LIST,
+  EFFECT_AUDIT,
+  getFamily,
+  getFamilyForEffect,
+  getVariant,
+  resolveVariant,
+  listFamilies,
+  validateFamilyCatalog,
+  isClassicEffect,
+  getClassicEffects
+} from './scene/families.js';
+import { sampleScene, mutateScene, crossoverScenes, sampleMany, validateSample } from './scene/sampler.js';
+import { createPlaylist, createSceneScheduler, quantizeDelay, PLAYBACK_MODES } from './scene/playlist.js';
+import { createHistory } from './scene/history.js';
+import { createThumbnailStore } from './scene/storage.js';
+import { exportPack, importPack, parsePack, serializePack } from './scene/packs.js';
 import { ENGINE_EFFECTS, isEngineEffect, getEngineEffectNames } from './engine/registry.js';
 import {
   startAutoTransition,
@@ -58,12 +93,22 @@ import { createRenderLoop } from './perf/renderLoop.js';
 import { createFpsWidget } from './perf/fpsCounterUI.js';
 import { ObjectPool } from './perf/objectPool.js';
 import { mountUI } from './ui/index.js';
+import {
+  getPresets,
+  loadPreset,
+  savePreset,
+  saveScene,
+  promoteScene,
+  getPresetScenes
+} from './ui/presets.js';
 
 // Re-exportar todo
 export { Effects };
 export {
   startVisualizer,
   changeEffect,
+  setScene,
+  getScene,
   getCurrentEffect,
   getAvailableEffects,
   stopVisualizer,
@@ -85,11 +130,54 @@ export {
   stopAudio,
   getAudioState,
   getFrequencyData,
+  getWaveformData,
   getAudioFeatures,
   tickAudio
 };
 export { createEngine, ENGINE_EFFECTS, isEngineEffect, getEngineEffectNames };
 export { loadAudioMap, getAudioMap, setAudioOverride, resetAudioOverrides };
+export {
+  SCENE_SCHEMA_VERSION,
+  createScene,
+  migrateScene,
+  validateScene,
+  serializeScene,
+  deserializeScene,
+  legacyStateToScene,
+  sceneToLegacyState,
+  encodeSceneCompact,
+  decodeSceneCompact,
+  sceneFingerprint,
+  randomSeed
+};
+export {
+  FAMILIES,
+  FAMILY_LIST,
+  EFFECT_AUDIT,
+  getFamily,
+  getFamilyForEffect,
+  getVariant,
+  resolveVariant,
+  listFamilies,
+  validateFamilyCatalog,
+  isClassicEffect,
+  getClassicEffects,
+  sampleScene,
+  mutateScene,
+  crossoverScenes,
+  sampleMany,
+  validateSample,
+  createPlaylist,
+  createSceneScheduler,
+  quantizeDelay,
+  PLAYBACK_MODES,
+  createHistory,
+  createThumbnailStore,
+  exportPack,
+  importPack,
+  parsePack,
+  serializePack
+};
 export {
   startAutoTransition,
   stopAutoTransition,
@@ -115,6 +203,14 @@ export {
   ObjectPool
 };
 export { mountUI };
+export {
+  getPresets,
+  loadPreset,
+  savePreset,
+  saveScene,
+  promoteScene,
+  getPresetScenes
+};
 
 // Exportar como objeto namespace para compatibilidad
 export default {

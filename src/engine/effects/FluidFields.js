@@ -38,12 +38,93 @@ export const FLUID_FIELDS_SCHEMA = {
   bloom: { type: 'number', default: 0.85, min: 0.0, max: 3.0, label: 'Bloom', group: 'Apariencia' },
   exposure: { type: 'number', default: 0.98, min: 0.2, max: 3.0, label: 'Exposición', group: 'Apariencia' },
   audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio', group: 'Comportamiento' },
+  variant: { type: 'int', default: 0, min: 0, max: 4, label: 'Variante', group: 'Comportamiento' },
   seed: { type: 'int', default: 1, min: 0, max: 2147483647, label: 'Seed', group: 'Comportamiento' }
 };
+
+export const FLUID_VARIANTS = Object.freeze(['membrane', 'torus', 'ribbon', 'smoke', 'swarm']);
 
 const FALLBACK_AUDIO = Object.freeze({
   enabled: false, level: 0, rms: 0, bass: 0, mid: 0, high: 0, beat: 0, energy: 0
 });
+
+/**
+ * Geometría inicial por variante. Es pura y determinista para poder testear
+ * la diferencia estructural entre variantes sin WebGL.
+ * @param {number} variant
+ * @param {number} size
+ * @param {number} seed
+ */
+export function createFluidHomeData(variant, size, seed = 1) {
+  const count = size * size;
+  const home = new Float32Array(count * 4);
+  const vel = new Float32Array(count * 4);
+  const pos = new Float32Array(count * 4);
+  const rng = mulberry32(seed | 0 || 1);
+  const kind = variant | 0;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const u = ((x + 0.5 + y * 0.61803398875) % size) / size;
+      const v = ((y + 0.5) / size) * 2 - 1;
+      const theta = u * TAU;
+
+      const s1 = rng();
+      const s2 = rng();
+      const s3 = rng();
+
+      let hx;
+      let hy;
+      let hz;
+
+      if (kind === 1) {
+        // Toro: u recorre el círculo mayor, v el menor.
+        const phi = v * Math.PI;
+        const major = 1.05 + 0.10 * Math.sin(theta * 3.0);
+        const minor = 0.42;
+        const ring = major + minor * Math.cos(phi + Math.sin(theta * 2.0) * 0.18);
+        hx = Math.cos(theta) * ring;
+        hy = minor * Math.sin(phi) + 0.08 * Math.sin(theta * 4.0);
+        hz = Math.sin(theta) * ring;
+      } else if (kind === 2) {
+        // Cinta helicoidal: banda que se retuerce sobre un eje vertical.
+        const twist = v * 1.25;
+        const angle = theta + twist;
+        const radius = 1.22 + 0.16 * Math.cos(v * Math.PI * 2.2);
+        hx = Math.cos(angle) * radius;
+        hy = v * 1.65 + 0.16 * Math.sin(theta * 2.0 + v * 2.4);
+        hz = Math.sin(angle) * radius;
+      } else {
+        // Membrana original: cilindro abierto con pliegues orgánicos.
+        const fold = Math.sin(theta * 3.0 + v * 2.2) * 0.20
+                   + Math.sin(theta * 5.0 - v * 1.7) * 0.07;
+        const radius = 1.28 + 0.30 * Math.cos(v * Math.PI * 0.92) + fold;
+        hx = Math.cos(theta) * radius + 0.10 * Math.sin(theta * 4.0 + v * 3.0);
+        hy = v * 1.95 + 0.20 * Math.sin(theta * 2.0 + v * 3.4);
+        hz = Math.sin(theta) * radius;
+      }
+
+      home[i] = hx;
+      home[i + 1] = hy;
+      home[i + 2] = hz;
+      home[i + 3] = (u + v * 0.08 + 1.0) % 1.0;
+
+      const jitter = 0.035;
+      pos[i] = hx + (rng() - 0.5) * jitter;
+      pos[i + 1] = hy + (rng() - 0.5) * jitter;
+      pos[i + 2] = hz + (rng() - 0.5) * jitter;
+      pos[i + 3] = rng() * 0.7;
+
+      vel[i] = (s1 - 0.5) * 0.08;
+      vel[i + 1] = (s2 - 0.5) * 0.08;
+      vel[i + 2] = (s3 - 0.5) * 0.08;
+      vel[i + 3] = s1;
+    }
+  }
+
+  return { home, pos, vel };
+}
 
 export class FluidFields extends Effect {
   static schema = FLUID_FIELDS_SCHEMA;
@@ -110,54 +191,11 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
   _createHomeAndState() {
     const gl = this.gl;
     const size = this.particleSize;
-    const count = size * size;
-    const home = new Float32Array(count * 4);
-    const vel = new Float32Array(count * 4);
-    const pos = new Float32Array(count * 4);
-    const rng = mulberry32(this.params.seed | 0 || 1);
+    const data = createFluidHomeData(this.params.variant | 0, size, this.params.seed | 0 || 1);
 
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const i = (y * size + x) * 4;
-        const u = ((x + 0.5 + y * 0.61803398875) % size) / size;
-        const v = ((y + 0.5) / size) * 2 - 1;
-        const theta = u * TAU;
-
-        const seed = rng();
-        const seed2 = rng();
-        const seed3 = rng();
-
-        // Membrana paramétrica: cilindro abierto con pliegues orgánicos.
-        const fold = Math.sin(theta * 3.0 + v * 2.2) * 0.20
-                   + Math.sin(theta * 5.0 - v * 1.7) * 0.07;
-        const radius = 1.28 + 0.30 * Math.cos(v * Math.PI * 0.92) + fold;
-        const yPos = v * 1.95 + 0.20 * Math.sin(theta * 2.0 + v * 3.4);
-
-        const hx = Math.cos(theta) * radius + 0.10 * Math.sin(theta * 4.0 + v * 3.0);
-        const hz = Math.sin(theta) * radius;
-        const hy = yPos;
-
-        home[i] = hx;
-        home[i + 1] = hy;
-        home[i + 2] = hz;
-        home[i + 3] = (u + v * 0.08 + 1.0) % 1.0;
-
-        const jitter = 0.035;
-        pos[i] = hx + (rng() - 0.5) * jitter;
-        pos[i + 1] = hy + (rng() - 0.5) * jitter;
-        pos[i + 2] = hz + (rng() - 0.5) * jitter;
-        pos[i + 3] = rng() * 0.7;
-
-        vel[i] = (seed - 0.5) * 0.08;
-        vel[i + 1] = (seed2 - 0.5) * 0.08;
-        vel[i + 2] = (seed3 - 0.5) * 0.08;
-        vel[i + 3] = seed;
-      }
-    }
-
-    this.homeTexture = this._createTexture(size, home);
-    const posA = this._createTexture(size, pos);
-    const velA = this._createTexture(size, vel);
+    this.homeTexture = this._createTexture(size, data.home);
+    const posA = this._createTexture(size, data.pos);
+    const velA = this._createTexture(size, data.vel);
     const posB = this._createTexture(size, null);
     const velB = this._createTexture(size, null);
 
@@ -198,7 +236,7 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
    */
   setParameters(patch) {
     const changed = super.setParameters(patch);
-    if (changed.includes('seed') && this.state) this._rebuildState();
+    if ((changed.includes('seed') || changed.includes('variant')) && this.state) this._rebuildState();
     return changed;
   }
 

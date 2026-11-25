@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Generativo – Umbral Vision</title>
+  <meta name="description" content="Umbral Vision: dispositivo visual generativo con familias, escenas reproducibles, generación y audio reactivo.">
+  <meta name="theme-color" content="#050508">
+  <meta property="og:title" content="Generativo – Umbral Vision">
+  <meta property="og:description" content="Dispositivo visual generativo con familias, escenas y audio reactivo.">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://hugomoraga.github.io/umbral-vision/">
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Lato:ital,wght@0,300;0,400;0,700;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/style.css">
+  <link rel="stylesheet" href="./assets/css/generator.css">
+  <link rel="stylesheet" href="./assets/css/scene-controls.css">
+  </head>
+  <body id="generator">
+    <main></main>
+
+    <div class="uv-vignette" aria-hidden="true"></div>
+    <span class="uv-crosshair uv-crosshair--tl" aria-hidden="true"></span>
+    <span class="uv-crosshair uv-crosshair--tr" aria-hidden="true"></span>
+
+    <header class="uv-topbar">
+      <div class="uv-brand">
+        <a class="uv-brand-word" href="https://kndl.quicio.org/">KNDL</a>
+        <span class="uv-brand-slash">/</span>
+        <span class="uv-brand-product">Umbral Vision</span>
+        <span class="uv-brand-kicker">Dispositivo visual generativo</span>
+      </div>
+
+      <div class="uv-top-actions">
+        <div class="uv-live" id="uv-live">
+          <span class="uv-live-dot" aria-hidden="true"></span>
+          <span class="uv-live-label">Render</span>
+          <span class="uv-live-value" id="uv-fps">— FPS</span>
+          <span class="uv-backend" id="uv-backend">GPU</span>
+        </div>
+
+        <div class="uv-menu">
+          <button type="button" class="uv-btn uv-btn-outline uv-explore" id="uv-explore-btn"
+                  aria-haspopup="true" aria-expanded="false">Explore</button>
+          <div class="uv-menu-panel" id="uv-explore-menu" hidden>
+            <a href="https://kndl.quicio.org/imaginario/">Imaginario</a>
+            <a href="https://kndl.quicio.org/dispositivos/">Dispositivos</a>
+            <button type="button" data-uv-tab-target="info">Acerca del motor</button>
+            <button type="button" data-uv-tab-target="presets">Presets</button>
+            <a href="https://kndl.quicio.org/">Volver al sitio</a>
+          </div>
+        </div>
+
+        <button type="button" class="uv-btn uv-btn-icon" id="fullscreenBtn" aria-label="Pantalla completa"></button>
+        <button type="button" class="uv-btn uv-btn-icon" id="uv-panel-btn" aria-label="Mostrar u ocultar panel" aria-expanded="true"></button>
+      </div>
+    </header>
+
+    <aside id="panel" class="uv-panel" aria-label="Controles del generador">
+      <header class="panel-header uv-panel-head">
+        <div class="uv-panel-eyebrow">
+          <span>Efecto</span>
+          <b id="uv-effect-index">01 / 19</b>
+        </div>
+        <div class="uv-panel-title-row">
+          <h1 id="uv-effect-title">Fluid Fields</h1>
+          <button type="button" class="panel-toggle uv-btn uv-btn-icon" aria-label="Ocultar panel"></button>
+        </div>
+        <p class="uv-panel-desc" id="uv-effect-desc">Tejido de partículas sobre una membrana viva.</p>
+
+        <div class="uv-tabs" role="tablist" aria-label="Secciones del panel">
+          <button type="button" role="tab" data-uv-tab="params" aria-selected="true">Parámetros</button>
+          <button type="button" role="tab" data-uv-tab="presets" aria-selected="false" tabindex="-1">Presets</button>
+          <button type="button" role="tab" data-uv-tab="info" aria-selected="false" tabindex="-1">Info</button>
+        </div>
+      </header>
+
+      <div class="uv-panel-body">
+        <div class="uv-tab-panel" data-uv-panel="params" role="tabpanel">
+          <div id="effect-params-host"></div>
+          <p class="uv-params-empty" id="uv-params-fallback" hidden>
+            Este efecto clásico no expone parámetros en vivo. Elegí una familia GPU para
+            controlar forma, movimiento y apariencia.
+          </p>
+          <div id="audio-controls"></div>
+        </div>
+
+        <div class="uv-tab-panel" data-uv-panel="presets" role="tabpanel" hidden>
+          <div class="uv-preset-save">
+            <label class="uv-sr-only" for="preset-name">Nombre del preset</label>
+            <input id="preset-name" type="text" maxlength="60" placeholder="Nombre del preset" autocomplete="off">
+            <button type="button" class="uv-btn uv-btn-primary" id="preset-save">Guardar</button>
+          </div>
+          <div class="uv-preset-list" id="preset-list"></div>
+        </div>
+
+        <div class="uv-tab-panel" data-uv-panel="info" role="tabpanel" hidden>
+          <dl class="uv-info-grid">
+            <div><dt>Familia</dt><dd id="uv-info-family">—</dd></div>
+            <div><dt>Render</dt><dd id="uv-info-renderer">—</dd></div>
+            <div><dt>Resolución</dt><dd id="uv-info-res">—</dd></div>
+            <div><dt>FPS</dt><dd id="uv-info-fps">—</dd></div>
+            <div><dt>Partículas</dt><dd id="uv-info-particles">—</dd></div>
+            <div><dt>Calidad</dt><dd id="uv-info-quality">—</dd></div>
+          </dl>
+
+          <div class="uv-info-section">
+            <span class="uv-section-label">Auto-transición</span>
+            <div class="uv-param-row">
+              <label for="transitionInterval">Intervalo</label>
+              <input id="transitionInterval" type="range" min="3" max="30" value="10">
+              <span class="uv-param-value" id="transitionIntervalValue">10s</span>
+            </div>
+          </div>
+
+          <div class="uv-info-section">
+            <span class="uv-section-label">Atajos</span>
+            <ul class="uv-shortcuts">
+              <li><kbd>←</kbd><kbd>→</kbd><span>Efecto anterior / siguiente</span></li>
+              <li><kbd>Espacio</kbd><span>Auto-transición</span></li>
+              <li><kbd>P</kbd><span>Pausa / reanudar</span></li>
+              <li><kbd>F</kbd><span>Pantalla completa</span></li>
+              <li><kbd>H</kbd><span>Mostrar / ocultar panel</span></li>
+              <li><kbd>M</kbd><span>Micrófono</span></li>
+              <li><kbd>?</kbd><span>Ayuda</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="uv-transport" id="uv-transport">
+      <div class="uv-audio" id="uv-audio">
+        <div class="uv-spectrum-wrap">
+          <canvas id="audio-spectrum" aria-label="Espectro de audio en vivo: graves, medios y agudos" title="Graves · Medios · Agudos"></canvas>
+          <div class="uv-spectrum-labels" aria-hidden="true">
+            <span data-band="bass">Bajos</span><span data-band="mid">Medios</span><span data-band="high">Agudos</span>
+          </div>
+        </div>
+        <button type="button" class="uv-btn uv-btn-quiet uv-mic" id="micBtn" aria-pressed="false">
+          <span class="uv-mic-copy">
+            <span class="uv-mic-title" data-uv-mic-label>Audio</span>
+            <span class="uv-mic-sub">Input</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="uv-playback">
+        <button type="button" class="uv-btn uv-btn-icon" id="uv-prev" aria-label="Efecto anterior"></button>
+        <button type="button" class="uv-btn uv-play" id="uv-play" aria-label="Pausar"></button>
+        <button type="button" class="uv-btn uv-btn-icon" id="uv-next" aria-label="Efecto siguiente"></button>
+        <label class="uv-auto">
+          <input type="checkbox" id="autoTransition">
+          <span class="uv-switch-track" aria-hidden="true"></span>
+          <span>Auto</span>
+        </label>
+      </div>
+    </div>
+
+    <section class="uv-dock" id="uv-dock" aria-label="Catálogo de efectos">
+      <div class="uv-dock-head">
+        <span class="uv-dock-label">Efectos <b id="uv-effect-count">19</b></span>
+        <div class="uv-strip-controls">
+          <button type="button" class="uv-btn uv-btn-icon" id="uv-strip-prev" aria-label="Desplazar a la izquierda"></button>
+          <button type="button" class="uv-btn uv-btn-icon" id="uv-strip-next" aria-label="Desplazar a la derecha"></button>
+        </div>
+      </div>
+
+      <div class="uv-strip-wrap">
+        <div id="thumbnails" class="uv-strip"></div>
+      </div>
+
+      <div class="uv-dock-actions">
+        <button type="button" class="uv-btn uv-btn-icon" id="lite-mode-btn" aria-label="Modo lite" aria-pressed="false"></button>
+        <button type="button" class="uv-btn uv-btn-icon" id="uv-save-preset" aria-label="Guardar preset"></button>
+        <button type="button" class="uv-btn uv-btn-icon" id="capture-btn" aria-label="Descargar PNG"></button>
+        <button type="button" class="uv-btn uv-btn-icon" id="share-btn" aria-label="Compartir URL"></button>
+      </div>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+    <script type="module" src="./assets/umbral-vision.js"></script>
+  </body>
+</html>

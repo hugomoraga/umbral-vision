@@ -263,3 +263,119 @@ shimmer, volumen y dinámica, más BPM/fase/confianza en vivo.
 ![Controles de audio](media/audio-controls.png)
 
 ## 7. Studio UI (v0.7)
+
+## 8. Escenas, familias y generación (v0.10)
+
+### Genoma de escena
+
+Un preset es una escena guardada; una escena generada es una escena efímera que
+puede promoverse a preset. El genoma vive en `src/scene/Scene.js`:
+
+```js
+{
+  schemaVersion: 2,
+  id, name, createdAt, updatedAt,
+  origin: 'manual' | 'generated' | 'mutated',
+  parentId,
+  effect: 'fluidFields',
+  variant: 'torus',
+  seed: 84721,
+  params: { /* validado por el efecto */ },
+  palette: { mode, hue, saturation },
+  post: { bloom, exposure, vignette, grain, aberration, feedback, feedbackDecay },
+  drift: { enabled, rates: { hue, warp } },
+  moment: { timeOffset } | null,
+  tags, favorite
+}
+```
+
+- `seed` es de primer nivel: la reproducibilidad depende de ella.
+- `variant` es explícita para que una escena no cambie de composición si la
+  familia agrega variantes.
+- `drift` separa el genoma de la evolución en vivo; `moment.timeOffset` congela
+  un instante.
+- Los presets anteriores (`{ effect, interval, audioEnabled, params }`) se
+  migran en lectura a `schemaVersion: 2` sin perder id, nombre, fecha ni
+  parámetros. La migración es idempotente (`src/ui/presets.js`).
+- `setScene()`/`getScene()` están disponibles en el engine y en `Visualizer`.
+  `setEffect()` sigue funcionando y construye una escena compatible.
+
+### Familias y variantes
+
+La familia es la identidad estable; la variante es la gramática; la escena es
+la instancia. Catálogo en `src/scene/families.js`.
+
+| Familia | Variantes implementadas | Variantes planificadas |
+|---|---|---|
+| Fluid Fields | `membrane`, `torus`, `ribbon` | `smoke`, `swarm` |
+| Organic Structures | `knot` | `cell`, `coral`, `biomech` |
+| Mathematical Forms | `mandelbulb` | `knot`, `lattice`, `orb` |
+| Temporal Systems | `veil` | `echo`, `smear`, `tunnel` |
+| Kinetic Geometry | `tunnel`, `spiral`, `mandala`, `sacred` | `flower` |
+| Waves & Fields | `waves`, `glitch`, `dunes` | `interference` |
+| Fractal Growth | `tree`, `glitch` | `coral`, `tendril` |
+| Clásicos | `matrix`, `glitch`, `melt`, `yinYang` | — |
+
+Los 15 efectos p5 históricos siguen accesibles. Los marcados como `retire` o
+`merge` salen de la taxonomía principal y quedan bajo **Clásicos**; no se borra
+código ni se rompen presets o enlaces.
+
+### Generación y linaje
+
+`src/scene/sampler.js` muestrea parámetros dentro de la gramática de cada
+familia, con restricciones estéticas y PRNG determinista (`mulberry32`).
+`mutateScene()` cambia 1–3 genes y conserva familia/variante por defecto;
+`crossoverScenes()` combina geometría de A con paleta de B. Toda escena
+generada o mutada registra `origin` y `parentId`.
+
+### Playlist y transiciones
+
+`src/scene/playlist.js` implementa los modos `curated`, `generative` e
+`hybrid`, con ventana de no repetición, peso de favoritos y cuantización al
+próximo compás/frase (`quantizeDelay`). `createSceneScheduler()` agenda los
+cambios sin `setInterval` fijo: consulta BPM/fase y cae al intervalo de
+respaldo si no hay audio confiable.
+
+Las transiciones GPU aceptan duración `auto` (1.5–4 s) y tipo `dissolve` o
+`luma`. El pase de feedback global conserva memoria visual entre escenas.
+
+### Memoria de escenas
+
+`src/scene/history.js` mantiene las últimas 30 escenas con genoma y thumbnail.
+La captura es retroactiva: guarda la escena visible. Los thumbnails viven en
+IndexedDB (`src/scene/storage.js`) con LRU y fallback a memoria; los genomas
+viven en localStorage. `src/scene/packs.js` exporta e importa packs JSON con
+merge por id y resumen de agregadas/omitidas/fallidas.
+
+### Audio fast/slow y feedback
+
+`AudioReactive` expone ahora, por banda:
+
+| Señal | Uso |
+|---|---|
+| `bassFast` / `midFast` / `highFast` | transientes y golpes |
+| `bassSlow` / `midSlow` / `highSlow` | gestos y respiración |
+| `waveRms` / `transient` | forma de onda temporal |
+| `bassOnset` / `midOnset` / `highOnset` | onsets por banda con refractario |
+
+La normalización es independiente por banda (`agc`) y se mezcla con una
+referencia global para no aplanar la relación entre bandas. El `FeedbackStage`
+de `PostPipeline` aplica zoom, rotación, warp y decay al frame anterior; el
+audio modula esos parámetros desde `audio-map.json → feedback`.
+
+El feedback corre a **media resolución** y usa un warp trigonométrico barato en
+lugar de simplex noise. En el benchmark de software (SwiftShader) el overhead
+medido fue ~1% en `high` y ~3.5% en `lite`, manteniendo el efecto de arrastre.
+En `webglcontextrestored` las extensiones se re-adquieren y la reconstrucción se
+reintenta en el siguiente frame, porque algunos drivers tardan en exponer
+`EXT_color_buffer_float`.
+
+```json
+{
+  "agc": { "autoGain": 0.6, "floor": 0.03, "decay": 0.996,
+           "onsetThreshold": 1.6, "onsetMinFlux": 0.0015, "refractoryMs": 140 },
+  "feedback": { "amount": 0.25, "decay": 0.92, "zoom": 0.5, "rotation": 0.3,
+                "warp": 0.5, "bassZoom": 0.35, "midRotation": 0.4,
+                "kickDecay": 0.035, "highWarp": 0.25 }
+}
+```

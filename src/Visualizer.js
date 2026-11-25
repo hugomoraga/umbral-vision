@@ -16,6 +16,8 @@ import { createFpsCounter } from './perf/fpsCounter.js';
 import { detectProfile, getLiteMode } from './perf/deviceProfile.js';
 import { createEngine } from './engine/UmbralEngine.js';
 import { isEngineEffect, getEngineEffectNames, ENGINE_EFFECTS } from './engine/registry.js';
+import { createScene } from './scene/Scene.js';
+import { getDefaultVariantForEffect } from './scene/families.js';
 
 let p5Instance = null;
 let p5Sketch = null;
@@ -26,6 +28,7 @@ let fpsCounter = null;
 let engine = null;
 let engineContainer = null;
 let p5CanvasEl = null;
+let currentScene = null;
 let config = { isLite: false };
 let paused = false;
 
@@ -66,6 +69,11 @@ function startEngineEffect(effectName, container = null, options = {}) {
     } catch (error) {
       console.error('No se pudo iniciar el motor GPU:', error);
       engine = null;
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('uv:engine-unavailable', {
+          detail: { effectName, error }
+        }));
+      }
       return;
     }
     fpsCounter = engine.fpsCounter;
@@ -80,6 +88,10 @@ function startEngineEffect(effectName, container = null, options = {}) {
   }
   currentEffect = null;
   currentEffectName = effectName;
+  currentScene = engine?.getScene?.() || createScene({
+    effect: effectName,
+    variant: getDefaultVariantForEffect(effectName)
+  });
   if (paused && engine) engine.stop();
 }
 
@@ -121,6 +133,10 @@ function startP5Effect(effectName, container = null) {
       syncLiteConfig();
 
       currentEffectName = effectName;
+      currentScene = createScene({
+        effect: effectName,
+        variant: getDefaultVariantForEffect(effectName)
+      });
       p5Sketch = sketch;
       currentEffect = Effects[effectName](sketch);
 
@@ -164,7 +180,7 @@ export function startVisualizer(effectName = 'tunnel', container = null) {
  */
 export function changeEffect(effectName) {
   if (isEngineEffect(effectName)) {
-    startEngineEffect(effectName, null, { transitionMs: 1000 });
+    startEngineEffect(effectName, null, { transitionMs: 'auto', transitionType: 'dissolve' });
     return;
   }
   if (!Effects[effectName]) {
@@ -181,12 +197,60 @@ export function changeEffect(effectName) {
   const sk = p5Sketch || p5Instance;
   currentEffectName = effectName;
   currentEffect = Effects[effectName](sk);
+  currentScene = createScene({
+    effect: effectName,
+    variant: getDefaultVariantForEffect(effectName)
+  });
   if (renderLoop && !renderLoop.isRunning() && !paused) renderLoop.start();
   if (paused && engine) engine.stop();
 }
 
 export function getCurrentEffect() {
   return currentEffectName;
+}
+
+/**
+ * Carga una escena completa, sea GPU o p5.
+ * @param {object} scene
+ * @param {{transitionMs?:number|'auto', transitionType?:string}} [options]
+ */
+export function setScene(scene, options = {}) {
+  const s = createScene(scene);
+  if (isEngineEffect(s.effect)) {
+    startEngineEffect(s.effect, null, {
+      transitionMs: options.transitionMs ?? 0,
+      transitionType: options.transitionType
+    });
+    if (engine) engine.setScene(s, options);
+    currentEffectName = s.effect;
+    currentEffect = null;
+    currentScene = s;
+    return s;
+  }
+  if (!Effects[s.effect]) {
+    console.warn('Efecto no encontrado:', s.effect);
+    return null;
+  }
+  changeEffect(s.effect);
+  currentEffectName = s.effect;
+  currentScene = s;
+  return s;
+}
+
+/**
+ * Devuelve la escena activa, reconstruida desde el backend actual.
+ */
+export function getScene() {
+  if (!currentEffectName) return null;
+  if (isEngineEffect(currentEffectName) && engine) {
+    currentScene = engine.getScene();
+    return currentScene;
+  }
+  if (currentScene && currentScene.effect === currentEffectName) return createScene(currentScene);
+  return createScene({
+    effect: currentEffectName,
+    variant: getDefaultVariantForEffect(currentEffectName)
+  });
 }
 
 export function getAvailableEffects() {
@@ -219,6 +283,7 @@ export function stopVisualizer() {
   p5CanvasEl = null;
   currentEffect = null;
   currentEffectName = null;
+  currentScene = null;
   engineContainer = null;
   fpsCounter = null;
 }

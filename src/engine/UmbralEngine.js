@@ -20,6 +20,11 @@ import { tickAudio, getAudioFeatures } from '../AudioReactive.js';
 import { createFpsCounter } from '../perf/fpsCounter.js';
 import { getLiteMode } from '../perf/deviceProfile.js';
 import { getAudioMap } from '../audio/audioConfig.js';
+import { createScene, sceneToEffectParams } from '../scene/Scene.js';
+import {
+  getVariantForEffectParam,
+  getVariantParamForEffect
+} from '../scene/families.js';
 
 const DEFAULT_EFFECT = 'fluidFields';
 
@@ -32,6 +37,16 @@ function resolveQuality(requested) {
   if (requested && requested !== 'auto') return requested;
   if (getLiteMode()) return 'lite';
   return 'high';
+}
+
+/**
+ * Duración de transición en ms. `'auto'` elige un valor variable entre 1.5 y 4 s.
+ * @param {number|'auto'|undefined} value
+ * @param {()=>number} [random]
+ */
+export function resolveTransitionMs(value, random = Math.random) {
+  if (value === 'auto') return 1500 + random() * 2500;
+  return Math.max(0, Number(value) || 0);
 }
 
 export function createEngine(options = {}) {
@@ -54,6 +69,7 @@ export function createEngine(options = {}) {
   let outgoing = null;
   let transition = null;
   let currentName = null;
+  let currentScene = null;
   let running = false;
   let raf = 0;
   let lastRaf = 0;
@@ -171,14 +187,33 @@ export function createEngine(options = {}) {
     const volumeExposure = Number(audioMap.volume?.exposure ?? 0.2);
     const volumeBloom = Number(audioMap.volume?.bloom ?? 0.15);
     const kickBloom = Number(audioMap.kick?.bloomPulse ?? 0.18);
+    const fb = audioMap.feedback || {};
+    const clamp01 = (v) => Math.min(1, Math.max(0, Number(v) || 0));
     const audioPost = {
       exposure: (basePost.exposure ?? 1) * (1 + (audio.rms * volumeExposure + audio.kickFlash * volumeExposure * 0.6) * audioAmount),
-      bloomStrength: (basePost.bloomStrength ?? 1) * (1 + (audio.high * 0.3 + audio.rms * volumeBloom + audio.kickFlash * kickBloom) * audioAmount)
+      bloomStrength: (basePost.bloomStrength ?? 1) * (1 + (audio.high * 0.3 + audio.rms * volumeBloom + audio.kickFlash * kickBloom) * audioAmount),
+      feedback: clamp01((basePost.feedback ?? fb.amount ?? 0.25)
+        + ((audio.bassFast || 0) * Number(fb.bassZoom ?? 0.35) * 0.22 + (audio.kickFlash || 0) * 0.12) * audioAmount),
+      feedbackDecay: Math.min(0.999, Math.max(0.5,
+        (basePost.feedbackDecay ?? fb.decay ?? 0.92) - (audio.kick || 0) * Number(fb.kickDecay ?? 0.035) * audioAmount)),
+      feedbackZoom: Math.max(0, (basePost.feedbackZoom ?? fb.zoom ?? 0.5)
+        + (audio.bassFast || 0) * Number(fb.bassZoom ?? 0.35) * audioAmount),
+      feedbackRotation: (basePost.feedbackRotation ?? fb.rotation ?? 0.3)
+        + (audio.midFast || 0) * Number(fb.midRotation ?? 0.4) * audioAmount,
+      feedbackWarp: Math.max(0, (basePost.feedbackWarp ?? fb.warp ?? 0.5)
+        + (audio.highFast || 0) * Number(fb.highWarp ?? 0.25) * audioAmount)
     };
+    if (transition?.type === 'feedback-smear') {
+      audioPost.feedback = clamp01(audioPost.feedback + 0.18);
+      audioPost.feedbackDecay = Math.min(0.985, audioPost.feedbackDecay + 0.025);
+      audioPost.feedbackZoom = Math.max(0, audioPost.feedbackZoom + 0.35);
+    }
     post.render(sceneFrom || sceneTo, renderer.output, {
       ...basePost,
       ...audioPost,
-      ...postOverrides
+      ...postOverrides,
+      transitionType: transition?.type || 'dissolve',
+      transitionProgress: mix
     }, sceneFrom ? sceneTo : null, mix);
 
     if (outgoing && transition && transition.elapsed >= transition.duration) {
@@ -203,21 +238,47 @@ export function createEngine(options = {}) {
     raf = 0;
   }
 
+  function transitionMsFrom(value) {
+    return resolveTransitionMs(value);
+  }
+
+  function cleanParams(raw) {
+    const out = { ...(raw || {}) };
+    delete out.variant;
+    delete out.seed;
+    return out;
+  }
+
+  function sceneFromCurrent(hint = null) {
+    const p = effect ? effect.getParameters() : {};
+    const variant = getVariantForEffectParam(currentName, p.variant ?? 0);
+    return createScene({
+      ...(hint || currentScene || {}),
+      effect: currentName,
+      variant,
+      seed: p.seed ?? 1,
+      params: cleanParams(p)
+    });
+  }
+
   /**
    * @param {string} name
    * @param {Record<string, number|boolean>} [nextParams]
-   * @param {{transitionMs?:number}} [options]
+   * @param {{transitionMs?:number, transitionType?:string, scene?:object}} [options]
    */
   function setEffect(name, nextParams, options = {}) {
     if (!isEngineEffect(name)) throw new Error(`Efecto GPU desconocido: ${name}`);
     if (name === currentName) {
       if (nextParams) effect.setParameters(nextParams);
+      currentScene = options.scene
+        ? createScene({ ...options.scene, effect: name })
+        : sceneFromCurrent();
       return effect;
     }
 
     if (currentName && effect) savedParams[currentName] = effect.getParameters();
 
-    const transitionMs = Math.max(0, options.transitionMs ?? 0);
+    const transitionMs = transitionMsFrom(options.transitionMs ?? 0);
     const previous = effect;
     const previousName = currentName;
     const next = createEffect(name, {
@@ -233,7 +294,8 @@ export function createEngine(options = {}) {
         from: previousName,
         to: name,
         elapsed: 0,
-        duration: transitionMs / 1000
+        duration: transitionMs / 1000,
+        type: options.transitionType || 'dissolve'
       };
     } else if (previous) {
       previous.dispose();
@@ -243,13 +305,46 @@ export function createEngine(options = {}) {
 
     effect = next;
     currentName = name;
+    currentScene = options.scene
+      ? createScene({ ...options.scene, effect: name })
+      : sceneFromCurrent();
     return effect;
+  }
+
+  /**
+   * Carga una escena completa en el motor GPU.
+   * @param {object} scene
+   * @param {{transitionMs?:number, transitionType?:string}} [options]
+   */
+  function setScene(scene, options = {}) {
+    const s = createScene(scene);
+    if (!isEngineEffect(s.effect)) {
+      throw new Error(`La escena usa un efecto no-GPU: ${s.effect}`);
+    }
+    const variantParam = getVariantParamForEffect(s.effect, s.variant);
+    setEffect(s.effect, { ...sceneToEffectParams(s), variant: variantParam }, {
+      ...options,
+      scene: s
+    });
+    currentScene = createScene({
+      ...s,
+      effect: s.effect,
+      variant: s.variant,
+      seed: s.seed
+    });
+    return currentScene;
+  }
+
+  function getScene() {
+    if (!effect) return null;
+    return sceneFromCurrent();
   }
 
   function setParameters(patch) {
     if (!effect) return [];
     const changed = effect.setParameters(patch);
     if (outgoing) outgoing.setParameters(patch);
+    if (changed.length) currentScene = sceneFromCurrent();
     return changed;
   }
 
@@ -314,11 +409,35 @@ export function createEngine(options = {}) {
 
   function handleContextRestored() {
     renderer.contextLost = false;
-    const preserve = effect ? effect.getParameters() : params;
-    buildResources(currentName, preserve);
-    renderer.resize();
-    effect.onResize(renderer.width, renderer.height);
-    start();
+    const name = currentName || DEFAULT_EFFECT;
+
+    // En algunos drivers la extensión float tarda un frame en volver a estar
+    // disponible después de `webglcontextrestored`. Reintentamos la
+    // reconstrucción en vez de dejar el motor con resources a medio crear.
+    const attempt = (tries = 0) => {
+      if (disposed) return;
+      renderer.refreshExtensions?.();
+      try {
+        const preserve = effect ? effect.getParameters() : params;
+        buildResources(name, preserve);
+        renderer.resize();
+        effect.onResize(renderer.width, renderer.height);
+        start();
+      } catch (error) {
+        if (tries < 3) {
+          setTimeout(() => attempt(tries + 1), 120);
+          return;
+        }
+        console.error('No se pudo restaurar el contexto WebGL:', error);
+        window.dispatchEvent(new CustomEvent('uv:engine-restore-failed', { detail: { error } }));
+      }
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => attempt(0));
+    } else {
+      attempt(0);
+    }
   }
 
   function dispose() {
@@ -328,6 +447,7 @@ export function createEngine(options = {}) {
     removeLiteListener();
     if (effect) effect.dispose();
     effect = null;
+    currentScene = null;
     if (outgoing) outgoing.dispose();
     outgoing = null;
     if (post) post.dispose();
@@ -383,6 +503,7 @@ export function createEngine(options = {}) {
     get renderer() { return renderer; },
     get effect() { return effect; },
     get currentEffect() { return currentName; },
+    get currentScene() { return currentScene ? createScene(currentScene) : null; },
     get transitioning() { return !!transition; },
     get running() { return running; },
     get fpsCounter() { return fpsCounter; },
@@ -392,6 +513,8 @@ export function createEngine(options = {}) {
     hide,
     renderFrame,
     setEffect,
+    setScene,
+    getScene,
     setParameters,
     getParameters,
     getSchema,

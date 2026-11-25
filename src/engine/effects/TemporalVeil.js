@@ -27,6 +27,7 @@ export const TEMPORAL_SCHEMA = {
   bloom: { type: 'number', default: 0.7, min: 0.0, max: 3.0, label: 'Bloom', group: 'Apariencia' },
   exposure: { type: 'number', default: 0.95, min: 0.2, max: 3.0, label: 'Exposición', group: 'Apariencia' },
   audio: { type: 'number', default: 1.0, min: 0.0, max: 1.0, label: 'Audio', group: 'Comportamiento' },
+  variant: { type: 'int', default: 0, min: 0, max: 3, label: 'Variante', group: 'Comportamiento' },
   seed: { type: 'int', default: 9, min: 0, max: 2147483647, label: 'Seed', group: 'Comportamiento' }
 };
 

@@ -59,9 +59,67 @@ in vec2 vUv;
 uniform sampler2D uSceneA;
 uniform sampler2D uSceneB;
 uniform float uMix;
+uniform int uMode;
 out vec4 outColor;
+
+float lumaOf(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
 void main() {
-  outColor = mix(texture(uSceneA, vUv), texture(uSceneB, vUv), uMix);
+  vec3 a = texture(uSceneA, vUv).rgb;
+  vec3 b = texture(uSceneB, vUv).rgb;
+  float m = clamp(uMix, 0.0, 1.0);
+  if (uMode == 1) {
+    // Mezcla ponderada por luminancia: evita el doble expuesto plano.
+    float la = lumaOf(a);
+    float lb = lumaOf(b);
+    m = clamp(m + (lb - la) * 0.12, 0.0, 1.0);
+  }
+  m = smoothstep(0.0, 1.0, m);
+  outColor = vec4(mix(a, b, m), 1.0);
+}
+`;
+
+export const FEEDBACK_FRAG = `${FRAG_HEADER}
+in vec2 vUv;
+uniform sampler2D uScene;
+uniform sampler2D uPrev;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uFeedback;
+uniform float uDecay;
+uniform float uZoom;
+uniform float uRotation;
+uniform float uWarp;
+out vec4 outColor;
+
+mat2 rot2(float a) {
+  float s = sin(a);
+  float c = cos(a);
+  return mat2(c, -s, s, c);
+}
+
+void main() {
+  vec2 c = vUv - 0.5;
+  float angle = uRotation * 0.006 + sin(uTime * 0.07) * 0.0015;
+  float zoom = 1.0 - uZoom * 0.0045;
+  vec2 warped = 0.5 + rot2(angle) * (c * zoom);
+  // Warp barato (sin simplex): el feedback corre en media resolución y no
+  // necesita ruido de alta frecuencia para dar la sensación de arrastre.
+  warped += uWarp * 0.0012 * vec2(
+    sin(vUv.y * 8.0 + uTime * 0.7),
+    cos(vUv.x * 7.0 - uTime * 0.6)
+  );
+
+  vec3 prev = texture(uPrev, warped).rgb * uDecay;
+  vec3 scene = texture(uScene, vUv).rgb;
+  vec3 color = prev + scene * uFeedback;
+
+  // Techo suave para evitar acumulación infinita y lavado.
+  color = color / (1.0 + color * 0.55);
+  color = min(color, vec3(2.2));
+  outColor = vec4(color, 1.0);
 }
 `;
 

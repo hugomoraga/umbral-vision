@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Sitio del Studio en `docs/`** con la UX/UI del host KNDL (layout
+  `generator`, CSS `style.css` + `generator.css`, panel, transporte, dock,
+  topbar) y los controles de escenas integrados. Publicado en GitHub Pages.
+- **`npm run build:site`** (`esbuild.site.mjs`): bundlea `src/ui/studio.js` en
+  `docs/assets/umbral-vision.js` y copia `audio-map.json`.
+- **Genoma de escena v2** (`src/scene/Scene.js`): efecto, variante, seed,
+  parámetros, paleta, post, drift y momento congelado. Serialización,
+  validación, fingerprint determinista y codificación compacta para URLs.
+- **Catálogo de familias y auditoría** (`src/scene/families.js`): 7 familias +
+  Clásicos, variantes estructurales y decisión `keep`/`merge`/`refactor`/`retire`
+  para los 19 efectos existentes.
+- **Sampler, mutación y cruce** (`src/scene/sampler.js`) con restricciones por
+  familia, PRNG determinista y linaje (`origin`/`parentId`).
+- **Playlist híbrida** (`src/scene/playlist.js`): modos curado/generativo/híbrido,
+  ventana de no repetición, peso de favoritos y cuantización al compás/frase.
+- **Memoria de escenas** (`src/scene/history.js`, `storage.js`, `packs.js`):
+  historial rodante, thumbnails en IndexedDB, captura retroactiva, promoción a
+  preset y export/import de packs.
+- **Audio fast/slow** por banda, forma de onda, AGC independiente y onsets por
+  banda. Nuevas señales `bassFast`, `bassSlow`, `waveRms`, `transient`, etc.
+- **Feedback global** en `PostPipeline` con zoom/rotación/warp/decay modulados
+  por audio y memoria visual entre escenas.
+- **Variantes de Fluid Fields**: `torus` y `ribbon`, además de `membrane`.
+- **Controles de escena** en la Studio UI: familia/variante, modo, generar,
+  mutar, guardar e historial.
+
+### Verified
+- Benchmark GPU con Chrome headless + SwiftShader (software), Fluid Fields:
+  - `high`: feedback on ≈287 ms/frame vs off ≈285 ms/frame (~1% de overhead).
+  - `lite`: feedback on ≈298 ms/frame vs off ≈288 ms/frame (~3.5%).
+  - Sampler: 1.000 escenas ≈32–35 ms; 500 mutaciones ≈13–17 ms.
+- Smoke: WebGL 2 activo, pérdida/restauración de contexto sin errores, perfil
+  `lite` aplicado en caliente, micrófono con fake device habilitando el pipeline
+  de audio, y fallback p5 cuando WebGL 2 no está disponible.
+
+### Changed
+- Los presets migran de `{effect, interval, audioEnabled, params}` a un genoma
+  v2 idempotente; `saveScene`/`promoteScene` conservan la seed y la variante.
+- `setEffect()` sigue funcionando y ahora construye/actualiza una escena.
+- `changeEffect()` usa transiciones de duración variable (`auto`).
+- Los efectos retirados de la taxonomía quedan bajo **Clásicos** sin borrar
+  código ni romper presets/enlaces.
+- `audio-map.json` incorpora `agc` y `feedback`.
+
 ## [0.9.0] - 2026-11-23
 
 ### Added

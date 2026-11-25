@@ -97,7 +97,7 @@ describe('share + capture con dos canvases', () => {
     expect(url).toContain('effect=fluidFields');
     expect(url).toContain('interval=8');
     expect(url).toContain('audio=1');
-    expect(parseShareURL(new URL(url).search)).toEqual({ effect: 'fluidFields', interval: 8, audio: true, params: null });
+    expect(parseShareURL(new URL(url).search)).toEqual({ effect: 'fluidFields', interval: 8, audio: true, params: null, scene: null });
   });
 });
 

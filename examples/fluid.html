@@ -98,6 +98,7 @@
       getEffectSchema,
       setEffectParameters,
       getEngineStats,
+      getEngine,
       setEngineQuality,
       initAudio,
       stopAudio,
@@ -111,6 +112,14 @@
     const initial = EFFECT_NAMES.includes(requested) ? requested : 'fluidFields';
 
     startVisualizer(initial, document.getElementById('stage'));
+
+    if (!getEngine()) {
+      const banner = document.createElement('div');
+      banner.className = 'hint';
+      banner.style.cssText = 'left:16px;right:auto;bottom:16px;opacity:.9;color:#ffd79a;max-width:420px;line-height:1.5';
+      banner.textContent = 'WebGL 2 no está disponible en este navegador. Esta demo necesita WebGL 2; probá examples/scenes.html para el fallback p5.';
+      document.body.appendChild(banner);
+    }
 
     const titleEl = document.getElementById('title');
     const controls = document.getElementById('controls');

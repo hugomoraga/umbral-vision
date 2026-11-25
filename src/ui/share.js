@@ -1,9 +1,16 @@
 /**
- * Share — capture PNG frame + build share URL with state.
+ * Share — capture PNG frame + build share URL with the scene genome.
  *
- * Share URL format: ?effect=tunnel&interval=10&audio=0
- * Parse al cargar el generador y restaura el estado.
+ * Formato nuevo: `?s=<genoma-base64url>` reconstruye una escena exacta.
+ * Formato legado: `?effect=tunnel&interval=10&audio=0&p={...}` sigue funcionando.
  */
+
+import {
+  createScene,
+  decodeSceneCompact,
+  encodeSceneCompact,
+  legacyStateToScene
+} from '../scene/Scene.js';
 
 export function captureFrame() {
   // Puede haber dos canvases (p5 2D + motor WebGL): capturamos el visible.
@@ -32,14 +39,20 @@ export function downloadFrame() {
   });
 }
 
-export function buildShareURL({ effect, interval, audio, params: effectParams } = {}) {
+export function buildShareURL({ effect, interval, audio, params: effectParams, scene } = {}) {
   const params = new URLSearchParams();
   if (effect) params.set('effect', String(effect));
   if (interval != null) params.set('interval', String(interval));
   params.set('audio', audio ? '1' : '0');
-  if (effectParams && typeof effectParams === 'object' && Object.keys(effectParams).length > 0) {
+
+  if (scene) {
+    const normalized = createScene(scene);
+    params.set('s', encodeSceneCompact(normalized));
+    params.set('effect', normalized.effect);
+  } else if (effectParams && typeof effectParams === 'object' && Object.keys(effectParams).length > 0) {
     params.set('p', JSON.stringify(effectParams));
   }
+
   const url = new URL(window.location.href);
   url.search = params.toString();
   url.hash = '';
@@ -66,11 +79,32 @@ export function parseShareURL(searchString) {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) effectParams = parsed;
     } catch { /* URL inválida: ignorar parámetros */ }
   }
+
+  let scene = null;
+  if (params.has('s')) {
+    scene = decodeSceneCompact(params.get('s'));
+  }
+
+  const effect = scene?.effect || params.get('effect') || null;
+
   return {
-    effect: params.get('effect') || null,
+    effect,
     interval: params.has('interval') ? Number(params.get('interval')) || null : null,
     audio: params.get('audio') === '1',
-    params: effectParams
+    params: scene ? { ...scene.params, seed: scene.seed } : effectParams,
+    scene
   };
 }
 
+/**
+ * Reconstruye una escena desde una URL legada o nueva.
+ */
+export function sceneFromShareURL(searchString) {
+  const parsed = parseShareURL(searchString);
+  if (parsed.scene) return parsed.scene;
+  if (!parsed.effect) return null;
+  return legacyStateToScene({
+    effect: parsed.effect,
+    params: parsed.params || {}
+  }, { name: 'Escena compartida' });
+}

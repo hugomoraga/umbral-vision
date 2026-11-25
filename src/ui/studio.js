@@ -11,17 +11,21 @@ import { ENGINE_EFFECTS, isEngineEffect } from '../engine/registry.js';
 import {
   startVisualizer,
   changeEffect,
+  setScene,
+  getScene,
   getFpsCounter,
   getEngineStats,
   getEffectParameters,
   setEffectParameters,
+  getEngine,
   setVisualizerPaused,
   isVisualizerPaused
 } from '../Visualizer.js';
 import {
   initAudio,
   stopAudio,
-  getAudioState
+  getAudioState,
+  getAudioFeatures
 } from '../AudioReactive.js';
 import { startAutoTransition, stopAutoTransition } from '../Transition.js';
 import { getLiteMode, setLiteMode } from '../perf/deviceProfile.js';
@@ -29,7 +33,14 @@ import { createThumbnails } from './thumbnails.js';
 import { createEffectParams } from './effectParams.js';
 import { createAudioControls } from './audioControls.js';
 import { createSpectrum } from './spectrum.js';
-import { getPresets, savePreset, deletePreset } from './presets.js';
+import { getPresets, getPresetScenes, savePreset, saveScene, deletePreset } from './presets.js';
+import { createSceneControls } from './sceneControls.js';
+import { createHistory } from '../scene/history.js';
+import { createThumbnailStore } from '../scene/storage.js';
+import { createPlaylist, createSceneScheduler } from '../scene/playlist.js';
+import { sampleScene, mutateScene } from '../scene/sampler.js';
+import { createScene } from '../scene/Scene.js';
+import { getFamilyForEffect, resolveVariant, getRetiredEffects } from '../scene/families.js';
 import { downloadFrame, copyShareURL, parseShareURL } from './share.js';
 import { showToast, initToastListener } from './toast.js';
 import { initKeyboard } from './keyboard.js';
@@ -88,6 +99,7 @@ const META = {
 };
 
 const INTERVAL_KEY = 'umbral-vision:transition-interval';
+const MODE_KEY = 'umbral-vision:playback-mode';
 
 function buildRegistry() {
   const previews = {};
@@ -134,7 +146,17 @@ export function mountStudioUI() {
   };
 
   startVisualizer(initial, document.querySelector('#generator main'));
-  if (shareParams.params && isEngineEffect(initial)) {
+
+  // Si el navegador no tiene WebGL 2, el motor GPU no existe y el canvas queda
+  // negro. Caemos a p5 para que la UI siga siendo usable y avisamos.
+  const gpuAvailable = !isEngineEffect(initial) || !!getEngine();
+  if (!gpuAvailable) {
+    state.current = 'tunnel';
+    startVisualizer('tunnel', document.querySelector('#generator main'));
+    showToast('WebGL 2 no disponible: usando efectos p5');
+  }
+
+  if (shareParams.params && isEngineEffect(initial) && gpuAvailable) {
     setEffectParameters(shareParams.params);
   }
 
@@ -254,6 +276,155 @@ export function mountStudioUI() {
   });
   const audioControls = createAudioControls(document.getElementById('audio-controls'));
 
+  // ---- escenas: familias, generación y memoria ---------------------------
+  const thumbnailStore = createThumbnailStore();
+  const history = createHistory({ limit: 30, thumbnailStore });
+  let storedMode = 'hybrid';
+  try { storedMode = localStorage.getItem(MODE_KEY) || 'hybrid'; } catch { /* noop */ }
+  const playlist = createPlaylist({
+    mode: storedMode,
+    scenes: getPresetScenes(),
+    noRepeatWindow: 10,
+    weights: { curated: 0.3, generated: 0.7 }
+  });
+  const scheduler = createSceneScheduler({
+    playlist,
+    intervalMs: state.interval * 1000,
+    getAudio: () => getAudioFeatures(),
+    onScene: (scene) => {
+      if (scene) applyScene(scene, { record: true, silent: true });
+    }
+  });
+
+  const sceneHost = document.createElement('section');
+  sceneHost.id = 'uv-scene-controls-host';
+  sceneHost.className = 'uv-scene-controls-host';
+  if (paramsHost?.parentNode) paramsHost.parentNode.insertBefore(sceneHost, paramsHost);
+  else panel.querySelector('.panel-body')?.appendChild(sceneHost);
+
+  const sceneControls = createSceneControls(sceneHost, {
+    isFamilyAvailable: (family) => family.renderer !== 'webgl' || gpuAvailable,
+    getState: () => ({
+      scene: safeScene(),
+      mode: playlist.mode,
+      history: history.list(),
+      familyId: sceneFamilyId(safeScene()),
+      variantId: safeScene()?.variant
+    }),
+    onSelect: ({ familyId, variantId }) => {
+      const resolved = resolveVariant(familyId, variantId);
+      if (!resolved) return;
+      if (resolved.family.renderer === 'webgl' && !gpuAvailable) {
+        showToast('WebGL 2 no disponible en este navegador');
+        return;
+      }
+      if (resolved.family.renderer === 'webgl') {
+        const current = safeScene();
+        applyScene(createScene({
+          ...(current || {}),
+          effect: resolved.effect,
+          variant: variantId
+        }), { transitionMs: 'auto' });
+      } else {
+        selectEffect(resolved.effect);
+        refreshSceneControls();
+      }
+    },
+    onModeChange: (mode) => {
+      playlist.setMode(mode);
+      try { localStorage.setItem(MODE_KEY, mode); } catch { /* noop */ }
+      if (state.auto) startAuto();
+      refreshSceneControls();
+    },
+    onGenerate: () => {
+      const selection = sceneControls.getSelection();
+      const scene = sampleScene({ familyId: selection.familyId, variantId: selection.variantId });
+      applyScene(scene, { record: true });
+      showToast('Escena generada');
+    },
+    onMutate: () => {
+      const current = safeScene();
+      if (!current) return;
+      const scene = mutateScene(current, { allowVariantChange: true });
+      applyScene(scene, { record: true });
+      showToast('Escena mutada');
+    },
+    onSave: () => {
+      const scene = safeScene();
+      if (!scene) return;
+      const fallback = scene.name || `${META[scene.effect]?.[0] || scene.effect} ${new Date().toLocaleDateString('es-AR')}`;
+      const name = (prompt('Nombre de la escena:', fallback) || '').trim();
+      if (!name) return;
+      saveScene(name, scene);
+      history.push({ ...scene, name });
+      refreshPresetSources();
+      renderPresets();
+      refreshSceneControls();
+      showToast(`Escena “${name}” guardada`);
+    },
+    onHistorySelect: (id) => {
+      const entry = history.get(id);
+      if (entry) applyScene(entry.scene, { silent: true });
+    },
+    onHistorySave: (id) => {
+      const entry = history.get(id);
+      if (!entry) return;
+      const fallback = entry.scene.name || `${META[entry.scene.effect]?.[0] || entry.scene.effect} ${new Date().toLocaleDateString('es-AR')}`;
+      const name = (prompt('Nombre del preset:', fallback) || '').trim();
+      if (!name) return;
+      const scene = history.promote(id, name);
+      if (!scene) return;
+      saveScene(name, scene);
+      refreshPresetSources();
+      renderPresets();
+      showToast(`Preset “${name}” guardado`);
+    }
+  });
+
+  function sceneFamilyId(scene) {
+    if (!scene) return null;
+    return getFamilyForEffect(scene.effect);
+  }
+
+  function safeScene() {
+    try { return getScene(); } catch { return null; }
+  }
+
+  function refreshSceneControls() {
+    const scene = safeScene();
+    sceneControls.refresh({
+      scene,
+      mode: playlist.mode,
+      history: history.list(),
+      familyId: sceneFamilyId(scene),
+      variantId: scene?.variant
+    });
+  }
+
+  function refreshPresetSources() {
+    playlist.setScenes(getPresetScenes());
+    refreshSceneControls();
+  }
+
+  function applyScene(scene, options = {}) {
+    if (!scene) return null;
+    if (!gpuAvailable && isEngineEffect(scene.effect)) {
+      showToast('WebGL 2 no disponible en este navegador');
+      return null;
+    }
+    const applied = setScene(scene, {
+      transitionMs: options.transitionMs ?? 'auto',
+      transitionType: 'dissolve'
+    });
+    if (!applied) return null;
+    state.current = applied.effect;
+    if (thumbs) thumbs.highlight(applied.effect);
+    if (options.record) history.push(applied);
+    refreshEffectMeta();
+    refreshSceneControls();
+    return applied;
+  }
+
   const tabButtons = [...panel.querySelectorAll('[data-uv-tab]')];
   const tabPanels = [...panel.querySelectorAll('[data-uv-panel]')];
 
@@ -318,12 +489,13 @@ export function mountStudioUI() {
   const thumbs = thumbsEl
     ? createThumbnails(thumbsEl, ALL, (name) => selectEffect(name), {
         labels: SHORT_LABELS,
-        order: names
+        order: names,
+        classicNames: getRetiredEffects()
       })
     : null;
   const countEl = document.getElementById('uv-effect-count');
   if (countEl) countEl.textContent = String(names.length);
-  if (thumbs) thumbs.highlight(initial);
+  if (thumbs) thumbs.highlight(state.current);
 
   document.getElementById('uv-strip-prev')?.addEventListener('click', () => {
     thumbsEl?.scrollBy({ left: -260, behavior: 'smooth' });
@@ -335,10 +507,15 @@ export function mountStudioUI() {
   // ---- selección de efecto ----------------------------------------------
   function selectEffect(name) {
     if (!ALL[name]) return;
+    if (!gpuAvailable && isEngineEffect(name)) {
+      showToast('WebGL 2 no disponible en este navegador');
+      return;
+    }
     changeEffect(name);
     state.current = name;
     if (thumbs) thumbs.highlight(name);
     refreshEffectMeta();
+    refreshSceneControls();
     if (state.auto) startAuto();
   }
 
@@ -389,19 +566,30 @@ export function mountStudioUI() {
       state.interval = Number(intervalInput.value);
       if (intervalOut) intervalOut.textContent = `${state.interval}s`;
       try { localStorage.setItem(INTERVAL_KEY, String(state.interval)); } catch { /* noop */ }
+      scheduler.setIntervalMs(state.interval * 1000);
       if (state.auto) startAuto();
     });
   }
 
   function startAuto() {
-    startAutoTransition(state.interval * 1000, names, selectEffect);
+    scheduler.setIntervalMs(state.interval * 1000);
+    scheduler.stop();
+    if (playlist.mode === 'curated' && playlist.getState().scenes === 0) {
+      // Sin repertorio curado, el modo curado no tiene de dónde elegir.
+      startAutoTransition(state.interval * 1000, names, selectEffect);
+      return;
+    }
+    scheduler.start();
   }
 
   function setAuto(enabled) {
     state.auto = enabled;
     if (autoCheck) autoCheck.checked = enabled;
     if (enabled) startAuto();
-    else stopAutoTransition();
+    else {
+      scheduler.stop();
+      stopAutoTransition();
+    }
   }
   autoCheck?.addEventListener('change', () => setAuto(autoCheck.checked));
 
@@ -459,11 +647,13 @@ export function mountStudioUI() {
   const presetList = document.getElementById('preset-list');
 
   function currentPresetState() {
+    const scene = safeScene();
     return {
       effect: state.current,
       interval: state.interval,
       audioEnabled: getAudioState().enabled,
-      params: isEngineEffect(state.current) ? getEffectParameters() : null
+      params: isEngineEffect(state.current) ? getEffectParameters() : null,
+      scene
     };
   }
 
@@ -476,6 +666,7 @@ export function mountStudioUI() {
       return;
     }
     if (presetName) presetName.value = '';
+    refreshPresetSources();
     renderPresets();
     showToast(`Preset “${created.name}” guardado`);
   }
@@ -520,6 +711,7 @@ export function mountStudioUI() {
       remove.appendChild(createIcon('trash', 14));
       remove.addEventListener('click', () => {
         deletePreset(preset.id);
+        refreshPresetSources();
         renderPresets();
         showToast('Preset eliminado');
       });
@@ -531,10 +723,14 @@ export function mountStudioUI() {
 
   function applyPreset(preset) {
     if (!preset || !preset.state) return;
-    if (ALL[preset.state.effect]) selectEffect(preset.state.effect);
-    if (isEngineEffect(preset.state.effect) && preset.state.params) {
-      setEffectParameters(preset.state.params);
-      effectParams?.refresh(preset.state.effect);
+    if (preset.state.scene) {
+      applyScene(preset.state.scene, { silent: true });
+    } else if (ALL[preset.state.effect]) {
+      selectEffect(preset.state.effect);
+      if (isEngineEffect(preset.state.effect) && preset.state.params) {
+        setEffectParameters(preset.state.params);
+        effectParams?.refresh(preset.state.effect);
+      }
     }
     if (preset.state.interval) {
       state.interval = preset.state.interval;
@@ -555,7 +751,8 @@ export function mountStudioUI() {
       effect: state.current,
       interval: state.interval,
       audio: getAudioState().enabled,
-      params: isEngineEffect(state.current) ? getEffectParameters() : null
+      params: isEngineEffect(state.current) ? getEffectParameters() : null,
+      scene: safeScene()
     });
     if (res.method === 'clipboard') showToast('URL copiada');
     else showToast('No se pudo copiar la URL');
@@ -622,6 +819,7 @@ export function mountStudioUI() {
   state.paused = isVisualizerPaused();
   paintPause();
   refreshEffectMeta();
+  refreshSceneControls();
   openTab('params');
   if (!new URLSearchParams(window.location.search).has('nointro')) {
     initOnboarding({

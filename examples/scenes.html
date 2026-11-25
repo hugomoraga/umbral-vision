@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Umbral Vision — Escenas</title>
+  <style>
+    :root {
+      --bg: #04060c;
+      --panel: rgba(5, 10, 22, 0.82);
+      --line: rgba(120, 180, 255, 0.18);
+      --text: #dfe9ff;
+      --muted: rgba(223, 233, 255, 0.5);
+      --accent: #5fb6ff;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+    #stage { position: fixed; inset: 0; }
+    #hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      width: 310px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      font-size: 12px;
+      z-index: 10;
+      scrollbar-width: thin;
+    }
+    #hud h1 {
+      margin: 0 0 2px;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #9fc7ff;
+    }
+    #hud .sub { margin: 0 0 12px; opacity: 0.45; font-size: 11px; }
+    .uv-scene-controls { display: grid; gap: 8px; }
+    .uv-scene-head {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #9fc7ff;
+    }
+    .uv-badge {
+      margin-left: auto; padding: 2px 6px; border-radius: 999px;
+      font-size: 9px; letter-spacing: 0.08em;
+      background: rgba(255, 190, 90, 0.16);
+      border: 1px solid rgba(255, 190, 90, 0.35);
+      color: #ffd79a;
+    }
+    .uv-scene-row { display: flex; align-items: center; gap: 8px; }
+    .uv-scene-row > span { flex: 0 0 62px; opacity: 0.65; }
+    .uv-select {
+      flex: 1; min-width: 0; font: inherit; color: var(--text);
+      background: rgba(90, 150, 255, 0.10);
+      border: 1px solid var(--line); border-radius: 7px;
+      padding: 5px 7px;
+    }
+    .uv-scene-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .uv-btn {
+      font: inherit; color: #cfe3ff; cursor: pointer;
+      background: rgba(90, 150, 255, 0.14);
+      border: 1px solid rgba(120, 180, 255, 0.28);
+      border-radius: 7px; padding: 5px 9px;
+    }
+    .uv-btn:hover { background: rgba(90, 150, 255, 0.24); }
+    .uv-scene-status {
+      margin: 2px 0 0; font-size: 10.5px; color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .uv-scene-history-head {
+      display: flex; justify-content: space-between;
+      margin-top: 4px; font-size: 10px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .uv-scene-history { display: grid; gap: 4px; }
+    .uv-scene-history-row { display: flex; gap: 4px; }
+    .uv-scene-history-open {
+      flex: 1; text-align: left; font: inherit; cursor: pointer;
+      color: var(--text); background: rgba(255, 255, 255, 0.03);
+      border: 1px solid transparent; border-radius: 7px; padding: 5px 7px;
+      display: grid; gap: 1px;
+    }
+    .uv-scene-history-open:hover { border-color: var(--line); }
+    .uv-scene-history-open b { font-weight: 600; font-size: 11px; }
+    .uv-scene-history-open span { font-size: 9.5px; color: var(--muted); }
+    .uv-scene-empty { margin: 0; font-size: 10.5px; color: var(--muted); }
+    .uv-btn-icon { padding: 5px 7px; }
+    .hud-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+    #stats {
+      margin: 12px 0 0; font-size: 10px; line-height: 1.5;
+      color: var(--muted); white-space: pre-wrap;
+    }
+    .hint {
+      position: fixed; right: 16px; bottom: 12px;
+      font-size: 11px; opacity: 0.4; z-index: 10;
+    }
+    button.on { background: rgba(80, 220, 160, 0.2); border-color: rgba(80, 220, 160, 0.45); }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.2/p5.min.js"></script>
+</head>
+<body>
+  <main id="stage"></main>
+
+  <aside id="hud">
+    <h1>Umbral Vision</h1>
+    <p class="sub">Escenas · familias · generación</p>
+    <div id="scene-controls"></div>
+    <div class="hud-actions">
+      <button id="auto" class="uv-btn">Auto</button>
+      <button id="mic" class="uv-btn">🎤 Audio</button>
+      <button id="share" class="uv-btn">Compartir</button>
+    </div>
+    <pre id="stats">—</pre>
+  </aside>
+
+  <div class="hint">G: generar · M: mutar · S: guardar · H: ocultar panel</div>
+
+  <script type="module">
+    import {
+      startVisualizer,
+      setScene,
+      getScene,
+      setEffectParameters,
+      getEngineStats,
+      initAudio,
+      stopAudio,
+      getAudioState,
+      getAudioFeatures,
+      getEngine,
+      isEngineEffect,
+      sampleScene,
+      mutateScene,
+      createHistory,
+      createThumbnailStore,
+      createPlaylist,
+      createSceneScheduler,
+      getPresetScenes
+    } from '../src/index.js';
+    import { createScene } from '../src/scene/Scene.js';
+    import { getFamilyForEffect, resolveVariant } from '../src/scene/families.js';
+    import { saveScene } from '../src/ui/presets.js';
+    import { createSceneControls } from '../src/ui/sceneControls.js';
+    import { copyShareURL } from '../src/ui/share.js';
+
+    startVisualizer('fluidFields', document.getElementById('stage'));
+
+    // En navegadores sin WebGL 2 (o previews headless) caemos a p5 para que
+    // se pueda ver la UI y las familias p5 en lugar de quedar en negro.
+    const gpuAvailable = !!getEngine();
+    if (!gpuAvailable) {
+      startVisualizer('tunnel', document.getElementById('stage'));
+      const banner = document.createElement('p');
+      banner.className = 'uv-scene-status';
+      banner.style.margin = '10px 0 0';
+      banner.style.color = '#ffd79a';
+      banner.textContent = 'WebGL 2 no disponible en este navegador: se muestran efectos p5. Las familias GPU no se pueden previsualizar acá.';
+      document.getElementById('hud').appendChild(banner);
+    }
+
+    const history = createHistory({ limit: 30, thumbnailStore: createThumbnailStore() });
+    let mode = 'hybrid';
+    try { mode = localStorage.getItem('uv-demo-mode') || 'hybrid'; } catch { /* noop */ }
+
+    const playlist = createPlaylist({
+      mode,
+      scenes: getPresetScenes(),
+      noRepeatWindow: 10,
+      weights: { curated: 0.35, generated: 0.65 }
+    });
+    const scheduler = createSceneScheduler({
+      playlist,
+      intervalMs: 12000,
+      getAudio: () => getAudioFeatures(),
+      onScene: (scene) => applyScene(scene, { record: true })
+    });
+
+    const controls = createSceneControls(document.getElementById('scene-controls'), {
+      isFamilyAvailable: (family) => family.renderer !== 'webgl' || gpuAvailable,
+      getState: () => {
+        const scene = getScene();
+        return {
+          scene,
+          mode: playlist.mode,
+          history: history.list(),
+          familyId: scene ? getFamilyForEffect(scene.effect) : null,
+          variantId: scene?.variant
+        };
+      },
+      onSelect: ({ familyId, variantId }) => {
+        const resolved = resolveVariant(familyId, variantId);
+        if (!resolved) return;
+        if (resolved.family.renderer === 'webgl' && !gpuAvailable) {
+          alert('Este navegador no tiene WebGL 2. Probá las familias p5 (Kinetic Geometry, Waves & Fields, Fractal Growth) o abrí la demo en un navegador con WebGL 2.');
+          return;
+        }
+        const scene = getScene();
+        applyScene(createScene({
+          ...(scene || {}),
+          effect: resolved.effect,
+          variant: variantId
+        }), { record: false });
+      },
+      onModeChange: (nextMode) => {
+        playlist.setMode(nextMode);
+        mode = nextMode;
+        try { localStorage.setItem('uv-demo-mode', nextMode); } catch { /* noop */ }
+        if (scheduler.running) startAuto();
+        refresh();
+      },
+      onGenerate: () => {
+        const selection = controls.getSelection();
+        applyScene(sampleScene({ familyId: selection.familyId, variantId: selection.variantId }), { record: true });
+      },
+      onMutate: () => {
+        const scene = getScene();
+        if (scene) applyScene(mutateScene(scene, { allowVariantChange: true }), { record: true });
+      },
+      onSave: () => {
+        const scene = getScene();
+        if (!scene) return;
+        const name = (prompt('Nombre de la escena:', scene.name || scene.effect) || '').trim();
+        if (!name) return;
+        saveScene(name, scene);
+        history.push({ ...scene, name });
+        playlist.setScenes(getPresetScenes());
+        refresh();
+      },
+      onHistorySelect: (id) => {
+        const entry = history.get(id);
+        if (entry) applyScene(entry.scene, { record: false });
+      },
+      onHistorySave: (id) => {
+        const entry = history.get(id);
+        if (!entry) return;
+        const name = (prompt('Nombre del preset:', entry.scene.name || entry.scene.effect) || '').trim();
+        if (!name) return;
+        const scene = history.promote(id, name);
+        if (!scene) return;
+        saveScene(name, scene);
+        playlist.setScenes(getPresetScenes());
+        refresh();
+      }
+    });
+
+    function refresh() {
+      const scene = getScene();
+      controls.refresh({
+        scene,
+        mode: playlist.mode,
+        history: history.list(),
+        familyId: scene ? getFamilyForEffect(scene.effect) : null,
+        variantId: scene?.variant
+      });
+    }
+
+    function applyScene(scene, { record = false } = {}) {
+      if (!scene) return null;
+      if (!gpuAvailable && isEngineEffect(scene.effect)) {
+        alert('Esa escena usa WebGL 2, que no está disponible en este navegador. Probá una familia p5.');
+        return null;
+      }
+      const applied = setScene(scene, { transitionMs: 'auto', transitionType: 'dissolve' });
+      if (!applied) return null;
+      if (record) history.push(applied);
+      refresh();
+      return applied;
+    }
+
+    function startAuto() {
+      scheduler.stop();
+      scheduler.start();
+    }
+
+    const autoBtn = document.getElementById('auto');
+    autoBtn.addEventListener('click', () => {
+      if (scheduler.running) {
+        scheduler.stop();
+        autoBtn.classList.remove('on');
+      } else {
+        startAuto();
+        autoBtn.classList.add('on');
+      }
+    });
+
+    const micBtn = document.getElementById('mic');
+    micBtn.addEventListener('click', async () => {
+      if (!getAudioState().enabled) {
+        try {
+          await initAudio();
+          micBtn.classList.add('on');
+          micBtn.textContent = '🎤 Audio ON';
+        } catch {
+          micBtn.textContent = '🎤 Error';
+        }
+      } else {
+        await stopAudio();
+        micBtn.classList.remove('on');
+        micBtn.textContent = '🎤 Audio';
+      }
+    });
+
+    document.getElementById('share').addEventListener('click', async () => {
+      const scene = getScene();
+      const res = await copyShareURL({
+        effect: scene?.effect,
+        interval: 10,
+        audio: getAudioState().enabled,
+        scene
+      });
+      if (res.method === 'clipboard') {
+        alert('URL copiada al portapapeles');
+      } else {
+        prompt('Copiá esta URL:', res.url);
+      }
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+      const key = event.key.toLowerCase();
+      if (key === 'g') controls.elements.generateBtn.click();
+      if (key === 'm') controls.elements.mutateBtn.click();
+      if (key === 's') controls.elements.saveBtn.click();
+      if (key === 'h') {
+        const hud = document.getElementById('hud');
+        hud.style.display = hud.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+
+    const stats = document.getElementById('stats');
+    setInterval(() => {
+      const s = getEngineStats();
+      const scene = getScene();
+      const audio = getAudioState();
+      const parts = [
+        scene ? `${scene.effect} · ${scene.variant} · seed ${scene.seed}` : '—',
+        s ? `${s.fps.toFixed(1)} fps · ${s.frameMs.toFixed(1)} ms · ${s.quality}` : '',
+        s?.transitioning ? `blend ${Math.round(s.transitionProgress * 100)}%` : '',
+        audio.enabled ? `audio ${Math.round((getAudioFeatures().level || 0) * 100)}%` : 'audio off'
+      ].filter(Boolean);
+      stats.textContent = parts.join('\n');
+    }, 500);
+
+    refresh();
+    window.UV = {
+      getScene,
+      setScene,
+      sampleScene,
+      mutateScene,
+      playlist,
+      history,
+      controls
+    };
+  </script>
+</body>
+</html>
