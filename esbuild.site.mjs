@@ -6,7 +6,7 @@
  */
 
 import { build } from 'esbuild';
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 
 await mkdir('docs/assets', { recursive: true });
 
@@ -26,5 +26,11 @@ await build({
 });
 
 await copyFile('src/audio/audio-map.json', 'docs/assets/audio-map.json');
+
+// Cache-buster: GitHub Pages cachea assets 10 minutos.
+const version = Date.now().toString(36);
+let html = await readFile('docs/index.html', 'utf8');
+html = html.replace(/(\.(?:css|js))\?v=[^"']*/g, `$1?v=${version}`);
+await writeFile('docs/index.html', html);
 
 console.log('Built docs/index.html site assets: docs/assets/umbral-vision.js, docs/assets/audio-map.json');
