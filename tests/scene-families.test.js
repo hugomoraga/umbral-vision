@@ -7,6 +7,7 @@ import {
   validateFamilyCatalog,
   listFamilies,
   getFamily,
+  getFamilyForScene,
   getVariant,
   getDefaultVariant,
   getDefaultVariantForEffect,
@@ -43,6 +44,10 @@ describe('family catalog', () => {
       const implemented = Object.values(family.variants).filter((v) => v.implemented !== false);
       expect(implemented.length).toBeGreaterThan(0);
     }
+    for (const family of listFamilies({ includeClassics: false })) {
+      const pending = Object.entries(family.variants).filter(([, v]) => v.implemented === false);
+      expect(pending, `${family.id} todavía tiene variantes pendientes`).toEqual([]);
+    }
   });
 
   it('resuelve variantes al efecto real', () => {
@@ -65,5 +70,13 @@ describe('family catalog', () => {
     expect(getDefaultVariantForEffect('tunnel')).toBe('tunnel');
     expect(getDefaultVariant('fluidFields')).toBe('membrane');
     expect(getVariant('fluidFields', 'torus').structural.topology).toBe('torus');
+  });
+
+  it('resuelve la familia con efecto + variante cuando hay ambigüedad', () => {
+    expect(getFamilyForScene({ effect: 'biomech', variant: 'coral' })).toBe('fractalGrowth');
+    expect(getFamilyForScene({ effect: 'biomech', variant: 'tendril' })).toBe('fractalGrowth');
+    expect(getFamilyForScene({ effect: 'mandala', variant: 'flower' })).toBe('kineticGeometry');
+    expect(getFamilyForScene({ effect: 'waves', variant: 'interference' })).toBe('wavesAndFields');
+    expect(getFamilyForScene({ effect: 'fluidFields', variant: 'smoke' })).toBe('fluidFields');
   });
 });

@@ -24,6 +24,7 @@ uniform float uSaturation;
 uniform float uGlow;
 uniform float uKick;
 uniform float uSeed;
+uniform int uVariant;
 uniform int uSteps;
 uniform int uIterations;
 
@@ -47,6 +48,16 @@ mat2 rot2(float a) {
   float s = sin(a);
   float c = cos(a);
   return mat2(c, -s, s, c);
+}
+
+float sdTorus(vec3 p, vec2 t) {
+  vec2 q = vec2(length(p.xz) - t.x, p.y);
+  return length(q) - t.y;
+}
+
+float sdBox(vec3 p, vec3 b) {
+  vec3 q = abs(p) - b;
+  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
 float mandelbulb(vec3 p) {
@@ -89,6 +100,30 @@ float map(vec3 p) {
     sin(q.z * 2.3 - uTime * 0.27),
     sin(q.x * 2.5 + uTime * 0.23)
   );
+
+  if (uVariant == 1) {
+    // Nudo: toro deformado con ondas angulares.
+    float a = atan(q.z, q.x);
+    float radius = 0.78 + 0.09 * sin(a * 3.0 + uTime * 0.35) + uWarp * 0.05;
+    q.y += 0.10 * sin(a * 5.0 - uTime * 0.4);
+    return sdTorus(q.xzy, vec2(radius, 0.20));
+  }
+
+  if (uVariant == 2) {
+    // Retícula: celdas repetidas con tamaño modulado.
+    vec3 cell = mod(q + 0.5, 1.0) - 0.5;
+    float size = 0.20 + 0.035 * sin(uTime * 0.5 + q.x * 2.0);
+    return sdBox(cell, vec3(size));
+  }
+
+  if (uVariant == 3) {
+    // Orbe: esfera con desplazamiento de baja frecuencia.
+    float r = 0.95
+      + 0.075 * sin(q.x * 4.0 + uTime * 0.3)
+      + 0.055 * sin(q.y * 5.0 - uTime * 0.2)
+      + 0.045 * sin(q.z * 6.0 + uTime * 0.25);
+    return length(q) - r;
+  }
 
   return mandelbulb(q * 1.05) * 0.9;
 }

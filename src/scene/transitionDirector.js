@@ -7,7 +7,7 @@
  */
 
 import { mulberry32 } from '../engine/math/random.js';
-import { getFamilyForEffect } from './families.js';
+import { getFamilyForScene } from './families.js';
 
 export const TRANSITION_TYPES = Object.freeze(['dissolve', 'luma', 'zoom', 'wipe', 'feedback']);
 export const TRANSITION_EASINGS = Object.freeze(['smooth', 'cubic', 'expo', 'linear']);
@@ -71,7 +71,7 @@ export function cssEasing(name) {
 
 function familyOf(scene) {
   if (!scene?.effect) return null;
-  return getFamilyForEffect(scene.effect);
+  return getFamilyForScene(scene);
 }
 
 /**

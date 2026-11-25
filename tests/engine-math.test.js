@@ -144,6 +144,24 @@ describe('organic geometry', () => {
     const b = createOrganicGeometry({ segmentsU: 24, segmentsV: 10, seed: 2 });
     expect(Array.from(a.positions.slice(0, 30))).not.toEqual(Array.from(b.positions.slice(0, 30)));
   });
+
+  it('genera variantes knot/cell/coral/biomech distintas', () => {
+    const variants = [0, 1, 2, 3].map((variant) =>
+      createOrganicGeometry({ segmentsU: 24, segmentsV: 12, seed: 4, variant })
+    );
+    for (const geo of variants) {
+      expect(geo.positions.length).toBeGreaterThan(0);
+      expect(geo.indices.length).toBeGreaterThan(0);
+      expect(Math.max(...geo.indices)).toBeLessThan(geo.positions.length / 3);
+    }
+    for (let i = 0; i < variants.length; i++) {
+      for (let j = i + 1; j < variants.length; j++) {
+        expect(Array.from(variants[i].positions.slice(0, 30))).not.toEqual(
+          Array.from(variants[j].positions.slice(0, 30))
+        );
+      }
+    }
+  });
 });
 
 describe('engine registry', () => {

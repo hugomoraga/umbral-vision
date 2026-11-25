@@ -6,6 +6,7 @@
 import { mulberry32 } from '../engine/math/random.js';
 import {
   getFamily,
+  getFamilyForScene,
   resolveVariant,
   listFamilies
 } from './families.js';
@@ -224,11 +225,7 @@ export function ensureConstraints(scene) {
 }
 
 export function familyIdForScene(scene) {
-  const family = listFamilies({ includeClassics: false })
-    .find((entry) => entry.id === scene.familyId
-      || entry.effect === scene.effect
-      || Object.values(entry.variants).some((v) => v.effect === scene.effect));
-  return family ? family.id : (scene.tags?.[0] || null);
+  return getFamilyForScene(scene) || scene.tags?.[0] || null;
 }
 
 export function validateSample(scene) {

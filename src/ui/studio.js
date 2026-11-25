@@ -41,7 +41,7 @@ import { createThumbnailStore } from '../scene/storage.js';
 import { createPlaylist, createSceneScheduler } from '../scene/playlist.js';
 import { sampleScene, mutateScene } from '../scene/sampler.js';
 import { createScene } from '../scene/Scene.js';
-import { getFamilyForEffect, resolveVariant, getRetiredEffects } from '../scene/families.js';
+import { getFamilyForScene, resolveVariant, getRetiredEffects } from '../scene/families.js';
 import { downloadFrame, copyShareURL, parseShareURL } from './share.js';
 import { showToast, initToastListener } from './toast.js';
 import { initKeyboard } from './keyboard.js';
@@ -329,17 +329,12 @@ export function mountStudioUI() {
         showToast('WebGL 2 no disponible en este navegador');
         return;
       }
-      if (resolved.family.renderer === 'webgl') {
-        const current = safeScene();
-        applyScene(createScene({
-          ...(current || {}),
-          effect: resolved.effect,
-          variant: variantId
-        }), { transitionMs: 'auto' });
-      } else {
-        selectEffect(resolved.effect);
-        refreshSceneControls();
-      }
+      const current = safeScene();
+      applyScene(createScene({
+        ...(current || {}),
+        effect: resolved.effect,
+        variant: variantId
+      }), { transitionMs: 'auto' });
     },
     onModeChange: (mode) => {
       playlist.setMode(mode);
@@ -393,8 +388,7 @@ export function mountStudioUI() {
   });
 
   function sceneFamilyId(scene) {
-    if (!scene) return null;
-    return getFamilyForEffect(scene.effect);
+    return getFamilyForScene(scene);
   }
 
   function safeScene() {

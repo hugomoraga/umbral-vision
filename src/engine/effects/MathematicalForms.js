@@ -152,6 +152,7 @@ export class MathematicalForms extends Effect {
       .set('uSaturation', p.saturation)
       .set('uGlow', p.glow)
       .set('uSeed', ((p.seed | 0) % 1000) * 0.01)
+      .set('uVariant', p.variant | 0)
       .set('uSteps', detail.steps)
       .set('uIterations', detail.iterations)
       .set('uCamPos', cam.pos)

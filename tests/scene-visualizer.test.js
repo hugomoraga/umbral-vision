@@ -80,4 +80,14 @@ describe('Visualizer scene bridge (p5)', () => {
     expect(active.variant).toBe('spiral');
     expect(active.seed).toBe(123);
   });
+
+  it('conserva variantes p5 no-default como flower', async () => {
+    const { startVisualizer, setScene, getScene } = await import('../src/Visualizer.js');
+    const { createScene } = await import('../src/scene/Scene.js');
+    startVisualizer('tunnel');
+    setScene(createScene({ effect: 'mandala', variant: 'flower', seed: 9 }));
+    const active = getScene();
+    expect(active.effect).toBe('mandala');
+    expect(active.variant).toBe('flower');
+  });
 });

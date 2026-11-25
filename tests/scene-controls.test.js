@@ -125,13 +125,13 @@ describe('scene controls', () => {
     expect(familySelect.value).toBe('kineticGeometry');
   });
 
-  it('deshabilita variantes no implementadas', () => {
+  it('habilita todas las variantes implementadas', () => {
     const root = makeRoot();
     createSceneControls(root, {
       getState: () => ({ scene: createScene({ effect: 'fluidFields', variant: 'membrane' }) })
     });
     const variantSelect = root.querySelector('#uv-variant-select');
-    const smoke = [...variantSelect.options].find((option) => option.value === 'smoke');
-    expect(smoke.disabled).toBe(true);
+    expect([...variantSelect.options].every((option) => !option.disabled)).toBe(true);
+    expect([...variantSelect.options].some((option) => option.value === 'smoke')).toBe(true);
   });
 });

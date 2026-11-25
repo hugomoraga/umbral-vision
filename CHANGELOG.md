@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Variantes completas por familia**:
+  - Fluid Fields: `membrane`, `torus`, `ribbon`, `smoke`, `swarm`.
+  - Organic Structures: `knot`, `cell`, `coral`, `biomech` (geometrías propias).
+  - Mathematical Forms: `mandelbulb`, `knot`, `lattice`, `orb` (branches SDF).
+  - Temporal Systems: `veil`, `echo`, `smear`, `tunnel` (emisión y feedback).
+  - Kinetic Geometry: `flower`; Waves & Fields: `interference`; Fractal Growth:
+    `coral`, `tendril`.
+- `getFamilyForScene()` resuelve familia + variante aunque un efecto p5 se
+  comparta entre familias (por ejemplo `biomech` en Fractal Growth).
 - **Sitio del Studio en `docs/`** con la UX/UI del host KNDL (layout
   `generator`, CSS `style.css` + `generator.css`, panel, transporte, dock,
   topbar) y los controles de escenas integrados. Publicado en GitHub Pages.

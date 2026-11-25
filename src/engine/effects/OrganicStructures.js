@@ -76,7 +76,8 @@ export class OrganicStructures extends Effect {
       tube: 0.26,
       scale: 0.95,
       twist: this.params.twist,
-      seed: this.params.seed | 0
+      seed: this.params.seed | 0,
+      variant: this.params.variant | 0
     });
     if (this.mesh) this.mesh.dispose();
     this.mesh = new Mesh(this.gl, geometry);
@@ -86,7 +87,7 @@ export class OrganicStructures extends Effect {
 
   setParameters(patch) {
     const changed = super.setParameters(patch);
-    if (this.mesh && (changed.includes('seed') || changed.includes('twist'))) {
+    if (this.mesh && (changed.includes('seed') || changed.includes('twist') || changed.includes('variant'))) {
       this._buildMesh();
     }
     return changed;

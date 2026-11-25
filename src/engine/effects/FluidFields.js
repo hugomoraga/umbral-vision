@@ -95,6 +95,22 @@ export function createFluidHomeData(variant, size, seed = 1) {
         hx = Math.cos(angle) * radius;
         hy = v * 1.65 + 0.16 * Math.sin(theta * 2.0 + v * 2.4);
         hz = Math.sin(angle) * radius;
+      } else if (kind === 3) {
+        // Humo: volumen turbulento con pliegues verticales.
+        const wobble = Math.sin(theta * 3.0 + v * 5.0) * 0.24
+                     + Math.sin(theta * 7.0 - v * 2.2) * 0.12;
+        const radius = 1.08 + wobble + 0.20 * Math.cos(v * Math.PI * 1.4);
+        hx = Math.cos(theta) * radius + 0.16 * Math.sin(v * 8.0 + theta * 2.0);
+        hy = v * 1.75 + 0.22 * Math.sin(theta * 4.0 + v * 3.0);
+        hz = Math.sin(theta) * radius + 0.12 * Math.cos(v * 7.0 - theta * 1.6);
+      } else if (kind === 4) {
+        // Enjambre: tres cúmulos orbitales con radios y alturas distintas.
+        const cluster = Math.floor(u * 3);
+        const angle = theta * 3.0 + v * 0.9 + cluster * 2.1;
+        const radius = 0.92 + 0.34 * Math.cos(v * Math.PI * 2.0) + cluster * 0.10;
+        hx = Math.cos(angle) * radius + 0.24 * Math.sin(cluster * 2.1 + v * 3.0);
+        hy = v * 1.35 + 0.34 * Math.sin(u * TAU * 5.0 + cluster) + (cluster - 1) * 0.35;
+        hz = Math.sin(angle) * radius + 0.24 * Math.cos(cluster * 1.7 - v * 2.4);
       } else {
         // Membrana original: cilindro abierto con pliegues orgánicos.
         const fold = Math.sin(theta * 3.0 + v * 2.2) * 0.20

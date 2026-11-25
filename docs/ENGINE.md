@@ -305,16 +305,21 @@ puede promoverse a preset. El genoma vive en `src/scene/Scene.js`:
 La familia es la identidad estable; la variante es la gramática; la escena es
 la instancia. Catálogo en `src/scene/families.js`.
 
-| Familia | Variantes implementadas | Variantes planificadas |
-|---|---|---|
-| Fluid Fields | `membrane`, `torus`, `ribbon` | `smoke`, `swarm` |
-| Organic Structures | `knot` | `cell`, `coral`, `biomech` |
-| Mathematical Forms | `mandelbulb` | `knot`, `lattice`, `orb` |
-| Temporal Systems | `veil` | `echo`, `smear`, `tunnel` |
-| Kinetic Geometry | `tunnel`, `spiral`, `mandala`, `sacred` | `flower` |
-| Waves & Fields | `waves`, `glitch`, `dunes` | `interference` |
-| Fractal Growth | `tree`, `glitch` | `coral`, `tendril` |
-| Clásicos | `matrix`, `glitch`, `melt`, `yinYang` | — |
+| Familia | Variantes |
+|---|---|
+| Fluid Fields | `membrane`, `torus`, `ribbon`, `smoke`, `swarm` |
+| Organic Structures | `knot`, `cell`, `coral`, `biomech` |
+| Mathematical Forms | `mandelbulb`, `knot`, `lattice`, `orb` |
+| Temporal Systems | `veil`, `echo`, `smear`, `tunnel` |
+| Kinetic Geometry | `tunnel`, `spiral`, `mandala`, `sacred`, `flower` |
+| Waves & Fields | `waves`, `glitch`, `dunes`, `interference` |
+| Fractal Growth | `tree`, `glitch`, `coral`, `tendril` |
+| Clásicos | `matrix`, `glitch`, `melt`, `yinYang` |
+
+Todas las variantes declaradas están implementadas y disponibles en el sampler.
+En GPU, Fluid cambia la geometría inicial de partículas, Organic cambia el
+mesh, Math y Temporal cambian branches del shader. En p5, la variante viaja en
+`config.variant` y cada efecto ajusta composición, paleta y movimiento.
 
 Los 15 efectos p5 históricos siguen accesibles. Los marcados como `retire` o
 `merge` salen de la taxonomía principal y quedan bajo **Clásicos**; no se borra

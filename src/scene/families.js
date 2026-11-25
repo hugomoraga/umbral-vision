@@ -46,8 +46,8 @@ export const FAMILIES = Object.freeze({
       membrane: variant('Membrana', 'fluidFields', { topology: 'open-cylinder', folds: 3 }, true),
       torus: variant('Toro', 'fluidFields', { topology: 'torus', folds: 0 }, true),
       ribbon: variant('Cinta', 'fluidFields', { topology: 'twisted-ribbon', folds: 2 }, true),
-      smoke: variant('Humo', 'fluidFields', { topology: 'volume', folds: 5 }),
-      swarm: variant('Enjambre', 'fluidFields', { topology: 'free-swarm', folds: 0 })
+      smoke: variant('Humo', 'fluidFields', { topology: 'volume', folds: 5 }, true),
+      swarm: variant('Enjambre', 'fluidFields', { topology: 'free-swarm', folds: 0 }, true)
     }
   },
   organicStructures: {
@@ -59,9 +59,9 @@ export const FAMILIES = Object.freeze({
     defaultVariant: 'knot',
     variants: {
       knot: variant('Nudo', 'organicStructures', { topology: 'torus-knot', shell: 'translucent' }, true),
-      cell: variant('Célula', 'organicStructures', { topology: 'cell', shell: 'membrane' }),
-      coral: variant('Coral', 'organicStructures', { topology: 'coral', shell: 'branched' }),
-      biomech: variant('Biomech', 'organicStructures', { topology: 'biomech', shell: 'segmented' })
+      cell: variant('Célula', 'organicStructures', { topology: 'cell', shell: 'membrane' }, true),
+      coral: variant('Coral', 'organicStructures', { topology: 'coral', shell: 'branched' }, true),
+      biomech: variant('Biomech', 'organicStructures', { topology: 'biomech', shell: 'segmented' }, true)
     }
   },
   mathematicalForms: {
@@ -73,9 +73,9 @@ export const FAMILIES = Object.freeze({
     defaultVariant: 'mandelbulb',
     variants: {
       mandelbulb: variant('Mandelbulb', 'mathematicalForms', { surface: 'mandelbulb', symmetry: 'radial' }, true),
-      knot: variant('Nudo SDF', 'mathematicalForms', { surface: 'torus-knot', symmetry: 'none' }),
-      lattice: variant('Retícula', 'mathematicalForms', { surface: 'lattice', symmetry: 'cubic' }),
-      orb: variant('Orbe', 'mathematicalForms', { surface: 'sphere', symmetry: 'radial' })
+      knot: variant('Nudo SDF', 'mathematicalForms', { surface: 'torus-knot', symmetry: 'none' }, true),
+      lattice: variant('Retícula', 'mathematicalForms', { surface: 'lattice', symmetry: 'cubic' }, true),
+      orb: variant('Orbe', 'mathematicalForms', { surface: 'sphere', symmetry: 'radial' }, true)
     }
   },
   temporalSystems: {
@@ -87,9 +87,9 @@ export const FAMILIES = Object.freeze({
     defaultVariant: 'veil',
     variants: {
       veil: variant('Velo', 'temporalVeil', { feedback: 'warp', emitters: 'filaments' }, true),
-      echo: variant('Eco', 'temporalVeil', { feedback: 'echo', emitters: 'rings' }),
-      smear: variant('Smear', 'temporalVeil', { feedback: 'directional', emitters: 'streaks' }),
-      tunnel: variant('Túnel temporal', 'temporalVeil', { feedback: 'zoom', emitters: 'tunnel' })
+      echo: variant('Eco', 'temporalVeil', { feedback: 'echo', emitters: 'rings' }, true),
+      smear: variant('Smear', 'temporalVeil', { feedback: 'directional', emitters: 'streaks' }, true),
+      tunnel: variant('Túnel temporal', 'temporalVeil', { feedback: 'zoom', emitters: 'tunnel' }, true)
     }
   },
   kineticGeometry: {
@@ -104,7 +104,7 @@ export const FAMILIES = Object.freeze({
       spiral: variant('Espiral', 'spiral', { symmetry: 'spiral', motif: 'dots' }, true),
       mandala: variant('Mándala', 'mandala', { symmetry: 'radial', motif: 'petals' }, true),
       sacred: variant('Sagrada', 'sacredGeometry', { symmetry: 'radial', motif: 'polygons' }, true),
-      flower: variant('Flor', 'mandala', { symmetry: 'radial', motif: 'flower' })
+      flower: variant('Flor', 'mandala', { symmetry: 'radial', motif: 'flower' }, true)
     }
   },
   wavesAndFields: {
@@ -118,7 +118,7 @@ export const FAMILIES = Object.freeze({
       waves: variant('Olas', 'waves', { field: 'sine-lines', motif: 'layered' }, true),
       glitch: variant('Olas Glitch', 'waveGlitch', { field: 'sine-distorted', motif: 'glitch' }, true),
       dunes: variant('Dunas', 'dune', { field: 'dunes', motif: 'sand' }, true),
-      interference: variant('Interferencia', 'waves', { field: 'interference', motif: 'ripples' })
+      interference: variant('Interferencia', 'waves', { field: 'interference', motif: 'ripples' }, true)
     }
   },
   fractalGrowth: {
@@ -131,8 +131,8 @@ export const FAMILIES = Object.freeze({
     variants: {
       tree: variant('Árbol', 'fractal', { growth: 'recursive-tree', motif: 'branches' }, true),
       glitch: variant('Árbol Glitch', 'fractalGlitch', { growth: 'recursive-tree', motif: 'glitch' }, true),
-      coral: variant('Coral', 'biomech', { growth: 'radial', motif: 'coral' }),
-      tendril: variant('Tendril', 'biomech', { growth: 'radial', motif: 'tendrils' })
+      coral: variant('Coral', 'biomech', { growth: 'radial', motif: 'coral' }, true),
+      tendril: variant('Tendril', 'biomech', { growth: 'radial', motif: 'tendrils' }, true)
     }
   },
   classics: {
@@ -167,6 +167,20 @@ export function getFamilyForEffect(effectName) {
     }
   }
   return null;
+}
+
+/**
+ * Resuelve la familia de una escena usando efecto + variante. Necesario
+ * porque un mismo efecto p5 puede servir a más de una familia (p. ej.
+ * biomech como variante de Fractal Growth).
+ */
+export function getFamilyForScene(scene) {
+  if (!scene) return null;
+  for (const family of Object.values(FAMILIES)) {
+    const entry = family.variants?.[scene.variant];
+    if (entry?.effect === scene.effect) return family.id;
+  }
+  return getFamilyForEffect(scene.effect);
 }
 
 export function getDefaultVariant(familyId) {

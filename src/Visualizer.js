@@ -221,6 +221,7 @@ function startP5Effect(effectName, container = null) {
         fpsCounter,
         onFrame: () => {
           if (currentEffect && currentEffect.draw) {
+            config.variant = currentScene?.variant;
             currentEffect.draw(config);
           }
         }

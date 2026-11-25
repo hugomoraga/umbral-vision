@@ -117,6 +117,7 @@ export class TemporalVeil extends Effect {
       .set('uSaturation', p.saturation)
       .set('uGlow', p.glow)
       .set('uSeed', (p.seed | 0) % 1000)
+      .set('uVariant', p.variant | 0)
       .set('uAudioBass', sig.body)
       .set('uAudioMid', sig.mid)
       .set('uAudioHigh', sig.high)

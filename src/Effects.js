@@ -130,7 +130,8 @@ export const Effects = {
     return {
       draw: (config) => {
         const isLite = !!(config && config.isLite);
-        const LAYERS = isLite ? LAYERS_LITE : LAYERS_FULL;
+        const isFlower = config?.variant === 'flower';
+        const LAYERS = isFlower ? (isLite ? 5 : 9) : (isLite ? LAYERS_LITE : LAYERS_FULL);
 
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 8);
@@ -140,14 +141,14 @@ export const Effects = {
         sketch.translate(sketch.width / 2, sketch.height / 2);
 
         const audioBoost = audioEnabled && audioLevel > 0.01 ? 1 + audioLevel * 1.2 : 1;
-        rotation += 0.008 * audioBoost;
+        rotation += (isFlower ? 0.010 : 0.008) * audioBoost;
 
         const petalCounts = new Array(LAYERS);
-        for (let l = 0; l < LAYERS; l++) petalCounts[l] = 8 + l * 3;
+        for (let l = 0; l < LAYERS; l++) petalCounts[l] = isFlower ? 6 + l * 2 : 8 + l * 3;
 
         for (let layer = 0; layer < LAYERS; layer++) {
-          const layerRotation = rotation * (1 + layer * 0.08);
-          const radius = 40 + layer * 35;
+          const layerRotation = rotation * (1 + layer * (isFlower ? 0.12 : 0.08));
+          const radius = isFlower ? 26 + layer * 30 : 40 + layer * 35;
           const petals = petalCounts[layer];
           const angleStep = TWO_PI / petals;
 
@@ -161,13 +162,15 @@ export const Effects = {
             const x = radius * cos;
             const y = radius * sin;
 
-            const size = 20 + Math.sin(layerRotation * 2 + i) * 10;
+            const size = (isFlower ? 15 : 20) + Math.sin(layerRotation * 2 + i) * (isFlower ? 7 : 10);
             const audioSize = audioLevel * 15;
             const radiusMean = (size + audioSize) / 2;
 
-            const hue = (180 + layer * 15 + i * 10 + rotation * 30) % 360;
-            const sat = 30 + audioLevel * 20;
-            const bright = 25 + audioLevel * 30;
+            const hue = isFlower
+              ? (300 + layer * 16 + i * 12 + rotation * 40) % 360
+              : (180 + layer * 15 + i * 10 + rotation * 30) % 360;
+            const sat = (isFlower ? 42 : 30) + audioLevel * 20;
+            const bright = (isFlower ? 30 : 25) + audioLevel * 30;
 
             sketch.fill(hue, sat, bright);
             sketch.stroke(hue, sat + 10, bright + 10);
@@ -267,35 +270,42 @@ export const Effects = {
     let time = 0;
     
     return {
-      draw: () => {
+      draw: (config) => {
+        const interference = config?.variant === 'interference';
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         sketch.background(0, 6);
         const audioBoost = audioEnabled && audioLevel > 0.01 ? audioLevel : 0.1;
         time += 0.04 * (1 + audioBoost);
         
-        const waveCount = 6;
+        const waveCount = interference ? 10 : 6;
         const centerY = sketch.height / 2;
         
         for (let w = 0; w < waveCount; w++) {
-          const waveHeight = 40 + w * 25;
-          const frequency = 0.015 + w * 0.008;
+          const waveHeight = (interference ? 22 : 40) + w * (interference ? 18 : 25);
+          const frequency = (interference ? 0.028 : 0.015) + w * 0.008;
           const speed = 0.04 + w * 0.015; // eslint-disable-line no-unused-vars
           
           sketch.beginShape();
           sketch.noFill();
           
-          // Paleta tipo Dune - dorados/ocres oscuros y luminosos
-          const hue = (35 + w * 8 + time * 5) % 360; // Dorados/ocres
-          const sat = 25 + audioLevel * 20;
-          const bright = 20 + audioLevel * 35;
+          // Dune (dorados) o interferencia (azules/violetas).
+          const hue = interference
+            ? (190 + w * 11 + time * 7) % 360
+            : (35 + w * 8 + time * 5) % 360;
+          const sat = (interference ? 38 : 25) + audioLevel * 20;
+          const bright = (interference ? 30 : 20) + audioLevel * 35;
           
           sketch.stroke(hue, sat, bright);
-          sketch.strokeWeight(1.5 + audioLevel * 2);
+          sketch.strokeWeight((interference ? 1.0 : 1.5) + audioLevel * 2);
           
           for (let x = 0; x < sketch.width; x += 4) {
-            const y = centerY + 
+            let y = centerY + 
               Math.sin(x * frequency + time + w) * waveHeight * (1 + audioBoost) +
               Math.cos(x * frequency * 0.7 + time * 1.3) * waveHeight * 0.4 * audioBoost;
+            if (interference) {
+              y += Math.sin(x * frequency * 1.7 - time * 0.8 + w * 1.7) * waveHeight * 0.45;
+              y += Math.sin(x * 0.09 + time * 0.6) * 10 * audioLevel;
+            }
             sketch.vertex(x, y);
           }
           
@@ -792,19 +802,33 @@ export const Effects = {
     let time = 0;
     const structures = [];
     let initialized = false;
+    let variantKey = null;
     
     return {
-      draw: () => {
+      draw: (config) => {
+        const variant = config?.variant === 'coral' || config?.variant === 'tendril'
+          ? config.variant
+          : 'biomech';
+        const isCoral = variant === 'coral';
+        const isTendril = variant === 'tendril';
         const { enabled: audioEnabled, level: audioLevel } = getAudioState();
         
-        if (!initialized) {
-          for (let i = 0; i < 8; i++) {
+        if (!initialized || variantKey !== variant) {
+          structures.length = 0;
+          variantKey = variant;
+          const count = isCoral ? 12 : isTendril ? 6 : 8;
+          for (let i = 0; i < count; i++) {
             structures.push({
-              x: (sketch.width / 9) * (i + 1),
+              x: (sketch.width / (count + 1)) * (i + 1),
               y: sketch.height / 2,
-              size: 40 + Math.random() * 30,
+              size: isCoral
+                ? 28 + Math.random() * 18
+                : isTendril ? 62 + Math.random() * 28 : 40 + Math.random() * 30,
               rotation: Math.random() * Math.PI * 2,
-              segments: 8 + Math.floor(Math.random() * 6)
+              segments: isCoral
+                ? 10 + Math.floor(Math.random() * 7)
+                : isTendril ? 5 + Math.floor(Math.random() * 3)
+                  : 8 + Math.floor(Math.random() * 6)
             });
           }
           initialized = true;
@@ -815,40 +839,44 @@ export const Effects = {
         const audioBoost = audioEnabled && audioLevel > 0.01 ? 1 + audioLevel * 1.3 : 1;
         
         for (const s of structures) {
-          s.rotation += 0.003 * audioBoost;
+          s.rotation += (isCoral ? 0.006 : isTendril ? 0.012 : 0.003) * audioBoost;
           
           sketch.push();
           sketch.translate(s.x, s.y);
           sketch.rotate(s.rotation);
+          if (isTendril) sketch.scale(0.55, 1.55);
+          if (isCoral) sketch.scale(1.08, 1);
           
-          // Paleta tipo Giger - metálica y orgánica
-          const hue = (200 + s.x * 0.1 + time * 5) % 360;
-          const sat = 18 + audioLevel * 10;
-          const bright = 12 + audioLevel * 18;
+          // Giger (azul), coral (naranja) o tendril (violeta).
+          const hue = isCoral
+            ? (12 + s.x * 0.05 + time * 3) % 360
+            : isTendril
+              ? (285 + s.x * 0.08 + time * 4) % 360
+              : (200 + s.x * 0.1 + time * 5) % 360;
+          const sat = (isCoral ? 48 : isTendril ? 35 : 18) + audioLevel * 12;
+          const bright = (isCoral ? 28 : isTendril ? 24 : 12) + audioLevel * 20;
           
           sketch.stroke(hue, sat, bright);
           sketch.strokeWeight(1.5 + audioLevel * 2);
           sketch.noFill();
           
-          // Forma orgánica biomecánica
+          const noiseAmp = isCoral ? 0.45 : isTendril ? 0.14 : 0.3;
           sketch.beginShape();
           for (let i = 0; i < s.segments; i++) {
             const angle = (Math.PI * 2 / s.segments) * i;
-            const noise = fractalNoise(s.x, s.y, time + i, 0.05) * 0.3;
+            const noise = fractalNoise(s.x, s.y, time + i, 0.05) * noiseAmp;
             const r = s.size * (1 + noise) * (1 + audioLevel * 0.3);
-            const x = r * Math.cos(angle);
-            const y = r * Math.sin(angle);
-            sketch.vertex(x, y);
+            sketch.vertex(r * Math.cos(angle), r * Math.sin(angle));
           }
           sketch.endShape(sketch.CLOSE);
           
-          // Líneas internas orgánicas
-          for (let i = 0; i < 3; i++) {
-            const innerSize = s.size * (0.3 + i * 0.2);
+          const innerRings = isCoral ? 4 : isTendril ? 2 : 3;
+          for (let i = 0; i < innerRings; i++) {
+            const innerSize = s.size * (isTendril ? 0.2 + i * 0.28 : 0.3 + i * 0.2);
             sketch.beginShape();
             for (let j = 0; j < s.segments; j++) {
               const angle = (Math.PI * 2 / s.segments) * j + time * 0.1;
-              const noise = fractalNoise(s.x, s.y, time + j, 0.08) * 0.2;
+              const noise = fractalNoise(s.x, s.y, time + j, 0.08) * (isCoral ? 0.3 : 0.2);
               const r = innerSize * (1 + noise);
               sketch.vertex(r * Math.cos(angle), r * Math.sin(angle));
             }

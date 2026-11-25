@@ -4,7 +4,7 @@
  * motor directamente, así puede testearse sin WebGL.
  */
 
-import { FAMILIES, listFamilies, resolveVariant, getFamilyForEffect } from '../scene/families.js';
+import { FAMILIES, listFamilies, resolveVariant, getFamilyForScene } from '../scene/families.js';
 import { PLAYBACK_MODES } from '../scene/playlist.js';
 import { TRANSITION_TYPES, TRANSITION_LABELS } from '../scene/transitionDirector.js';
 import { createIcon } from './icons.js';
@@ -200,7 +200,7 @@ export function createSceneControls(root, options = {}) {
     if (state.mode && PLAYBACK_MODES.includes(state.mode)) modeSelect.value = state.mode;
     transitionSelect.value = state.transitionType || 'auto';
     let familyId = state.familyId
-      || (scene ? getFamilyForEffect(scene.effect) : null)
+      || (scene ? getFamilyForScene(scene) : null)
       || familySelect.value
       || 'fluidFields';
     if (!FAMILIES[familyId] || !isFamilyAvailable(FAMILIES[familyId])) {

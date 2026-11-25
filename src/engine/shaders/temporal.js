@@ -28,6 +28,7 @@ uniform float uHue;
 uniform float uSaturation;
 uniform float uGlow;
 uniform float uSeed;
+uniform int uVariant;
 
 uniform float uAudioBass;
 uniform float uAudioMid;
@@ -61,20 +62,47 @@ void main() {
   q += uWarp * 0.09 * vec2(sin(q.y * 4.0 + t * 0.5), cos(q.x * 4.0 - t * 0.4));
   float r = length(q);
 
-  float ring = 0.5 + 0.5 * sin(r * 19.0 - t * 1.25 + f * 5.0 + uAudioMid * a * 4.0);
-  float filaments = pow(ring, 9.0);
-  filaments *= 1.0 + uAudioBass * a * 0.9;
-  filaments *= smoothstep(1.25, 0.1, r);
-  filaments *= 0.4 + 0.6 * smoothstep(-0.4, 0.7, f);
+  float ring = 0.0;
+  float filaments = 0.0;
+  float glowMask = 0.0;
 
-  float glowMask = exp(-r * 2.8) * (0.08 + uAudioRms * a * 0.25);
+  if (uVariant == 1) {
+    // Eco: anillos concéntricos amplios.
+    ring = 0.5 + 0.5 * sin(r * 30.0 - t * 0.72 + f * 2.0 + uAudioMid * a * 3.0);
+    filaments = pow(ring, 14.0) * smoothstep(1.5, 0.05, r);
+    filaments *= 0.6 + 0.4 * smoothstep(-0.2, 0.8, f);
+    glowMask = exp(-r * 1.8) * (0.10 + uAudioRms * a * 0.22);
+  } else if (uVariant == 2) {
+    // Smear: estelas direccionales.
+    float streak = 0.5 + 0.5 * sin(q.x * 14.0 + f * 4.0 + t * 0.6);
+    filaments = pow(streak, 7.0) * smoothstep(1.4, 0.0, r);
+    filaments *= 0.45 + 0.55 * (0.5 + 0.5 * sin(q.y * 6.0 - t * 0.4));
+    glowMask = exp(-r * 3.4) * (0.06 + uAudioRms * a * 0.18);
+  } else if (uVariant == 3) {
+    // Túnel: profundidad radial con anillos que se acercan.
+    float depth = 0.35 / (r + 0.18);
+    ring = 0.5 + 0.5 * sin(depth * 8.0 - t * 1.8 + f * 3.0 + uAudioMid * a * 4.0);
+    filaments = pow(ring, 8.0) * smoothstep(1.3, 0.05, r);
+    filaments *= 0.5 + 0.5 * smoothstep(-0.4, 0.7, f);
+    glowMask = exp(-r * 5.0) * (0.16 + uAudioRms * a * 0.28);
+  } else {
+    ring = 0.5 + 0.5 * sin(r * 19.0 - t * 1.25 + f * 5.0 + uAudioMid * a * 4.0);
+    filaments = pow(ring, 9.0);
+    filaments *= 1.0 + uAudioBass * a * 0.9;
+    filaments *= smoothstep(1.25, 0.1, r);
+    filaments *= 0.4 + 0.6 * smoothstep(-0.4, 0.7, f);
+    glowMask = exp(-r * 2.8) * (0.08 + uAudioRms * a * 0.25);
+  }
+
   vec3 hueColor = fluidColor(fract(uHue + r * 0.22 + f * 0.08 + t * 0.004), uSaturation);
   vec3 emission = hueColor * (filaments * uDensity + glowMask * 0.04) * uGlow;
   emission *= 0.7 + uKick * 1.25 + uAudioHigh * a * 0.35;
 
   // El frame anterior se zoom-ea, rota y distorsiona suavemente.
-  float zoom = 1.0 - uZoom * 0.0045 - uAudioBass * a * 0.006 - uKick * a * 0.008;
-  float angle = uRotation * 0.006 + sin(t * 0.07) * 0.0015;
+  float variantZoom = uVariant == 3 ? 1.9 : (uVariant == 2 ? 0.35 : (uVariant == 1 ? 0.7 : 1.0));
+  float variantRot = uVariant == 3 ? 1.7 : (uVariant == 2 ? 0.5 : 1.0);
+  float zoom = 1.0 - uZoom * 0.0045 * variantZoom - uAudioBass * a * 0.006 - uKick * a * 0.008;
+  float angle = uRotation * 0.006 * variantRot + sin(t * 0.07) * 0.0015;
   vec2 warped = 0.5 + rot2(angle) * (c * zoom);
   warped += uWarp * 0.0012 * vec2(
     snoise(vec3(vUv * 3.0, t * 0.13)),
